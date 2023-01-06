@@ -47,7 +47,7 @@ then
 
   printf "#################################\n\n"
   #Install nodejs
-  printf "Installing fnm for management of nodejs $NODE_VER..."
+  printf "Installing fnm for management of nodejs $NODE_VER...\n"
   curl -fsSL https://fnm.vercel.app/install | bash
   fnm install $NODE_VER
   fnm default $NODE_VER
