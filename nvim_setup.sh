@@ -53,7 +53,10 @@ then
   cd $HOME
   [ -d .config ] || mkdir .config
   cd .config
-  [ -d nvim ] && rm -rf nvim && mkdir nvim
+  if [ -d nvim ] ;then 
+    rm -rf nvim
+  fi
+  mkdir nvim
   cd nvim
   pwd
   git clone https://github.com/corigne/dotnvim.git .
