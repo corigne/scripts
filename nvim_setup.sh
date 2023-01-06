@@ -9,11 +9,16 @@ APT_CMD=$(which apt)
 PACMAN_CMD=$(which pacman)
 
 #Install nvim
-printf "  This script will install nvim for LINUX with the default
+printf "
+  This script will install nvim for LINUX with the default
   package manager, install nodejs via fnm (used by vimplugins),
   clone the dotfiles from github.com/corigne/dotnvim, and execute 
-  the dotfile install script, which installs and runs vimplug.\n"
-read -p "Do you wish to install nvim using this script? (Y/n): " PROMPT
+  the dotfile install script, which installs and runs vimplug.
+
+  WARNING: If you have nvim installed already, this script will
+  remove the existing nvim dotfiles in ~\\.config\\\nvim .
+  Please backup accordingly.\n\n"
+read -p "  Do you wish to install nvim using this script? (Y/n): " PROMPT
 
 if [ $PROMPT == 'Y' ]
 then
