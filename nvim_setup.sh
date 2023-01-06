@@ -36,7 +36,7 @@ then
     printf "Using pacman...\n" 
     sudo $PACMAN_CMD -S neovim
   else
-    echo "error can't install NVIM"
+    printf "error can't install NVIM"
     exit 1
   fi
 
