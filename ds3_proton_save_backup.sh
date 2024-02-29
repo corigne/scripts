@@ -6,7 +6,6 @@ REMOTE_DIR=ssh://traveler/harlow/games/dark_souls_backups
 DS3_SRC=$HOME/.steam/root/steamapps/compatdata/374320/pfx/drive_c/users/steamuser/AppData/Roaming/DarkSoulsIII
 
 
-[ -d $BAK_DIR ] || (mkdir -p $BAK_DIR && echo "Backup directory did not exist. Created backup directory: $BAK_DIR.")
 [ -d $BAK_DIR/DS3 ] || (mkdir -p $BAK_DIR/DS3 && echo "Backup directory did not exist. Created backup directory: $BAK_DIR.")
 
 rsync -av --exclude='*.xml' $DS3_SRC/ $BAK_DIR/DS3
