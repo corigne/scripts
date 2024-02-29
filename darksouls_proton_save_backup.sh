@@ -9,8 +9,8 @@ DS3_SRC=$HOME/.steam/root/steamapps/compatdata/374320/pfx/drive_c/users/steamuse
 [ -d $BAK_DIR/DS2 ] || (mkdir -p $BAK_DIR/DS2 && echo "Backup directory did not exist. Created backup directory: $BAK_DIR.")
 [ -d $BAK_DIR/DS3 ] || (mkdir -p $BAK_DIR/DS3 && echo "Backup directory did not exist. Created backup directory: $BAK_DIR.")
 
-cp -r $DS2_SRC/* $BAK_DIR/DS2
-cp -r $DS3_SRC/* $BAK_DIR/DS3
+rsync -av --exclude='*.xml' $DS2_SRC/ $BAK_DIR/DS2
+rsync -av --exclude='*.xml' $DS3_SRC/ $BAK_DIR/DS3
 
 echo 'Done backing up saves...'
 echo
