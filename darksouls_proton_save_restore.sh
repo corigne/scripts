@@ -2,6 +2,7 @@
 #restores backup saves to their correct locations, if the prefix already exists
 
 BAK_DIR=$HOME/Games/backups/DarkSouls
+REMOTE_DIR=ssh://traveler/harlow/games/dark_souls_backups
 DS2_SRC=$HOME/.steam/root/steamapps/compatdata/335300/pfx/drive_c/users/steamuser/AppData/Roaming/DarkSoulsII
 DS3_SRC=$HOME/.steam/root/steamapps/compatdata/374320/pfx/drive_c/users/steamuser/AppData/Roaming/DarkSoulsIII
 
@@ -10,6 +11,8 @@ DS3_SRC=$HOME/.steam/root/steamapps/compatdata/374320/pfx/drive_c/users/steamuse
 
 cp -r $BAK_DIR/DS2/* $DS2_SRC
 cp -r $BAK_DIR/DS3/* $DS3_SRC
+
+unison -batch -auto $BAK_DIR $REMOTE_DIR
 
 echo 'Done restoring saves...'
 echo
