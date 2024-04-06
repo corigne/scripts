@@ -1,6 +1,7 @@
 #!/bin/zsh
 setopt nonomatch
 slideshow=$HOME'/pictures/slideshow/'
+usr_backgrounds='/usr/share/backgrounds/slideshow/'
 pics=$HOME'/pictures/'
 dirs=($(find $pics -type d -name wallpaper))
 echo '//////// CLEANING UP' $slideshow '////////'
@@ -30,7 +31,7 @@ do
       i=0
     fi
     echo -n '.'
-    [ -f "$file" ] && cp $file $slideshow && i=i+1 && k=k+1
+    [ -f "$file" ] && cp $file $slideshow && cp $file $usr_backgrounds && i=i+1 && k=k+1
   done
   echo '\n'
   i=0
