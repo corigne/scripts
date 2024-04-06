@@ -1,7 +1,7 @@
 #!/bin/bash
 
 BACKGROUNDS="/usr/share/backgrounds"
-SLIDESHOW="/home/nexus/pictures/.slideshow"
+SLIDESHOW="/home/nexus/pictures/slideshow"
 FILE=$(ls $SLIDESHOW | shuf -n 1)
 FILE2=$(ls $SLIDESHOW | shuf -n 1)
 
