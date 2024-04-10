@@ -8,4 +8,3 @@ nvidia-settings --assign CurrentMetaMode="DP-4: 2560x1440_60 {ForceCompositionPi
 
 xrandr --output DP-0 --off &
 xrandr --output DP-2 --off &
-
