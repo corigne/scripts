@@ -7,8 +7,7 @@ ERR=(curl -sL --fail $URL -o $FILE)
 if ( $ERR -ne 22 )
 then
   printf "[INFO] Better Discord Installer retieved.\n"
-  printf "[INFO] Killing existing discord sessions to facilitate install."
-  pkill discord
+  killall Discord && printf "[INFO] Killed existing discord sessions to facilitate install.\n"
   chmod +x $FILE
   ./$FILE
   rm $FILE
