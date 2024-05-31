@@ -1,8 +1,8 @@
 #!/bin/zsh
 setopt nonomatch
 shared_slideshow='/usr/share/backgrounds/slideshow/'
-slideshow=$HOME'/pictures/sfw/'
-pics=$HOME'/pictures/'
+slideshow=$HOME'/Pictures/sfw/'
+pics=$HOME'/Pictures/'
 dirs=($(find $pics -type d -name wallpaper -not -path "**/questionable/**"))
 echo '//////// CLEANING UP' $slideshow and $shared_slideshow '////////'
 

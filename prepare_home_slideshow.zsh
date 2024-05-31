@@ -1,7 +1,7 @@
 #!/bin/zsh
 setopt nonomatch
-slideshow=$HOME'/pictures/slideshow/'
-pics=$HOME'/pictures/'
+slideshow=$HOME'/Pictures/slideshow/'
+pics=$HOME'/Pictures/'
 dirs=($(find $pics -type d -name wallpaper))
 echo '//////// CLEANING UP' $slideshow '////////'
 let i=0; let k=0
