@@ -4,7 +4,7 @@
 # Kills exterior monitors.
 pkill -9 picom &
 
-nvidia-settings --assign CurrentMetaMode="DP-4: 2560x1440_60 {ForceCompositionPipeline=Off, AllowGSYNCCompatible=On}" &
-
 xrandr --output DP-0 --off &
-xrandr --output DP-2 --off &
+xrandr --output DP-4 --off &
+xrandr --output DP-2 --mode 2560x1440 --rate 144
+nvidia-settings --assign CurrentMetaMode="DP-2: 2560x1440_144 +0+0 {ForceCompositionPipeline=Off, AllowGSYNCCompatible=On}"

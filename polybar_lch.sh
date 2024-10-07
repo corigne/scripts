@@ -1,13 +1,13 @@
 #!/bin/bash
-
-# Term running polybar if any
+# Terminate already running bar instances
 killall -q polybar
-
-# If all bars have ipc enabled...
+# If all your bars have ipc enabled, you can also use
 # polybar-msg cmd quit
 
-# Launch polybar, use def cfg in .config
-#polybar offset 2>&1 | tee -a /tmp/polybar_offset.log & disown
-polybar main 2>&1 | tee -a  /tmp/polybar.log & disown
+# Launch Polybar, using default config location ~/.config/polybar/config.ini
+polybar main 2>&1 | tee -a /tmp/polybar.log & disown
+polybar secondary 2>&1 | tee -a /tmp/polybar.log & disown
+
+echo "Polybar launched..."
 
 echo "Polybar launched!"
