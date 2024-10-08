@@ -42,7 +42,8 @@ INTERVAL=300
 #    -   no:   Do not resize the image
 #    -   crop: Resize the image to fill the whole screen, cropping out parts that don't fit
 #    -   fit:  Resize the image to fit inside the screen, preserving the original aspect ratio
-RESIZE_TYPE="fit"
+RESIZE_TYPE="crop"
+FILL_COLOR="b7bdf8"
 
 DISPLAY_LIST=$(swww query | grep -Po "^[^:]+")
 
@@ -64,7 +65,7 @@ while true; do
                         break 2
                     fi
                 fi
-                swww img --resize=$RESIZE_TYPE --outputs $disp $img
+                swww img --resize=$RESIZE_TYPE --fill-color=$FILL_COLOR --outputs $disp $img
                 # make sure each image is only used once
                 img=""
             done
