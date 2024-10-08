@@ -44,7 +44,10 @@ do
       i=0
     fi
     echo -n '.'
-    [ -f "$file" ] && cp $file $slideshow && sudo cp $file $shared_slideshow && i=i+1 && k=k+1
+    [ -f "$file" ] &&
+      cp $file $slideshow &&
+      sudo cp $file $shared_slideshow &&
+      i=i+1 && k=k+1
   done
   echo '\n'
   i=0
