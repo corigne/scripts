@@ -1,7 +1,7 @@
 #!/bin/sh
 
-BAT_LOW=15
-BAT_CRITICAL=5
+BAT_LOW=16
+BAT_CRITICAL=8
 BAT_CHECK_INTERVAL_SEC=30
 DIMMED=false
 
@@ -24,7 +24,7 @@ check_battery () {
                 systemctl hibernate
         elif [ "$status" = Discharging -a "$capacity" -le $BAT_LOW ]
         then
-                dunstify -u critical 'Battery low! System will hibernate at 5%.'
+                dunstify -u critical "Battery low! System will hibernate at $BAT_CRITICAL%."
                 echo 'Battery low!' >&1
                 sleep .5
                 light -O
