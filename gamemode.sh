@@ -12,3 +12,4 @@ if [ "$HYPRGAMEMODE" = 1 ] ; then
     exit
 fi
 hyprctl reload
+pifof waybar && killall waybar || (waybar & disown)
