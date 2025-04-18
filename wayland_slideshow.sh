@@ -32,8 +32,8 @@ fi
 echo "${BASHPID}" > ${PIDFILE}
 
 # Edit below to control the images transition
-export SWWW_TRANSITION_FPS=60
-export SWWW_TRANSITION_STEP=2
+export SWWW_TRANSITION_FPS=144
+export SWWW_TRANSITION_STEP=6
 
 # This controls (in seconds) when to switch to the next image
 INTERVAL=300
