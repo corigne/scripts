@@ -132,6 +132,7 @@ arr =
 # select all items with profit >= min_profit
 
 # print the info to the file
+file.print "# High Alch Prices \n"
 file.print "  - Prices calculated assuming firestaff is #{options[:firestaff] ? 'equipped' : 'not equipped'}.\n"
 file.print "  - Maximum possible burn rate of #{CASTS_PER_MIN * 60 * 4} items every 4 hours. \n\n"
 file.print "\n"
