@@ -13,6 +13,13 @@ if [[ $# -lt 1 ]] || [[ ! -d $1 ]]; then
     exit 1
 fi
 
+THEME="$2"
+if [[ "$2" == "" || $(gowall list | grep -c $THEME) -ne 1 ]]; then
+    THEME=""
+else
+    THEME="-t $THEME"
+fi
+
 # Make sure only 1 instance of swww_randomize
 PIDFILE=~/.local/state/swww-randomize-pidfile.txt
 if [ -e "${PIDFILE}" ]; then
@@ -65,7 +72,9 @@ while true; do
                         break 2
                     fi
                 fi
-                swww img --resize=$RESIZE_TYPE --fill-color=$FILL_COLOR --outputs $disp $img
+
+                gowall convert $img $THEME - --format png \
+                    | swww img --resize=$RESIZE_TYPE --fill-color=$FILL_COLOR --outputs $disp -
                 # make sure each image is only used once
                 img=""
             done
