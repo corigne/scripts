@@ -43,7 +43,7 @@ min_profit = options[:min_profit].to_i unless options[:min_profit].nil?
 is_members = options[:members].to_i unless options[:members].nil?
 
 # the file to write the output to
-file = File.new('ha_items.txt', 'w')
+file = File.new('ha_items.md', 'w')
 
 # get the price data
 url = URI.parse('https://prices.runescape.wiki/api/v1/osrs/1h')
@@ -134,11 +134,14 @@ arr =
 # print the info to the file
 file.print "  - Prices calculated assuming firestaff is #{options[:firestaff] ? 'equipped' : 'not equipped'}.\n"
 file.print "  - Maximum possible burn rate of #{CASTS_PER_MIN * 60 * 4} items every 4 hours. \n\n"
-file.print "#{'Item Name'.center(longest)}|#{'Membrs'.center(8)}|#{'Price'.center(15)}|#{'HA Value'.center(15)}|"
-file.print "#{'Buy Limit/4HR'.center(15)}|#{'Profit/Item'.center(15)}|#{'Profit/Hr'.center(15)}|"
-file.print "#{'Profit/4Hr'.center(15)}|#{'Daily Volume'.center(15)}|\n"
+file.print "\n"
+file.print "|#{'Item Name'.center(longest)}|#{'Membrs'.center(8)}|#{'Price'.center(15)}|#{'HA Value'.center(15)}"
+file.print "|#{'Buy Limit/4HR'.center(15)}|#{'Profit/Item'.center(15)}|#{'Profit/Hr'.center(15)}"
+file.print "|#{'Profit/4Hr'.center(15)}|#{'Daily Volume'.center(15)}|\n"
+file.print "|#{'---'.center(longest)}|#{'---'.center(8)}|#{'---'.center(15)}|#{'---'.center(15)}"
+file.print "|#{'---'.center(15)}|#{'---'.center(15)}|#{'---'.center(15)}|#{'---'.center(15)}|#{'---'.center(15)}|\n"
 arr.each do |n|
-  file.print "#{n[:name].ljust(longest)}|#{n[:members].to_s.rjust(8)}|#{n[:price].to_s.rjust(15)}|"
+  file.print "|#{n[:name].ljust(longest)}|#{n[:members].to_s.rjust(8)}|#{n[:price].to_s.rjust(15)}|"
   file.print "#{n[:high_alch_value].to_s.rjust(15)}|#{n[:buy_limit].to_s.rjust(15)}|#{n[:profit_per_unit].to_s.rjust(15)}|"
   file.print "#{n[:profit_per_hour].to_s.rjust(15)}|#{n[:profit_at_limit].to_s.rjust(15)}|#{n[:vol].to_s.rjust(15)}|\n"
 end
