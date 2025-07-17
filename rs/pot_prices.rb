@@ -1,4 +1,5 @@
 #!/usr/bin/ruby
+# Credit to Erid Pasho https://github.com/rogueocelot
 
 require 'net/http'
 require 'uri'
