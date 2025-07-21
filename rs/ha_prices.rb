@@ -74,8 +74,9 @@ fr_high_price = data[itemdata.find { |ele| ele['name'] == 'Fire rune' }['id'].to
 nr_low_price = data[itemdata.find { |ele| ele['name'] == 'Nature rune' }['id'].to_s]['avgLowPrice']
 fr_low_price = data[itemdata.find { |ele| ele['name'] == 'Fire rune' }['id'].to_s]['avgLowPrice']
 
-nr_price = nr_high_price + nr_low_price / 2
-fr_price = options[:firestaff] ? 0 : fr_high_price + fr_low_price / 2
+nr_price = (nr_high_price + nr_low_price) / 2
+fr_price = options[:firestaff] ? 0 : (fr_high_price + fr_low_price) / 2
+ha_rune_cost = nr_price + (5 * fr_price)
 
 # get all items
 longest = 0
@@ -101,7 +102,7 @@ itemdata.each do |x|
   end
   next if vol.nil?
 
-  profit = x['highalch'] - (price + nr_price + 5 * fr_price)
+  profit = x['highalch'] - (price + ha_rune_cost)
   temp1 = {
     id: id,
     name: name,
@@ -134,6 +135,7 @@ arr =
 # print the info to the file
 file.print "# High Alch Prices \n"
 file.print "  - Prices calculated assuming firestaff is #{options[:firestaff] ? 'equipped' : 'not equipped'}.\n"
+file.print "  - HA Rune Cost: #{ha_rune_cost.to_s.ljust(6)}\n"
 file.print "  - Maximum possible burn rate of #{CASTS_PER_MIN * 60 * 4} items every 4 hours. \n\n"
 file.print "\n"
 file.print "|#{'Item Name'.center(longest)}|#{'Membrs'.center(8)}|#{'Price'.center(15)}|#{'HA Value'.center(15)}"
