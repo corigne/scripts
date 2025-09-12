@@ -10,6 +10,7 @@ THEME=""
 if [[ -n "$2" ]] && gowall list | grep -q "^$2$"; then
     THEME="-t $2"
 fi
+echo "Using theme: $THEME"
 
 # Single instance check
 PIDFILE=~/.local/state/swww-randomize-pidfile.txt
@@ -20,6 +21,7 @@ if [[ -e "$PIDFILE" ]]; then
         exit 1
     fi
 fi
+echo "No instance of wallpaper script running, continuing with PID: $$."
 echo "$$" >"$PIDFILE"
 trap 'rm -f "$PIDFILE"' EXIT
 
@@ -28,24 +30,41 @@ export SWWW_TRANSITION_FPS=144
 export SWWW_TRANSITION_STEP=6
 INTERVAL=300
 RESIZE_TYPE="crop"
+FILTER_TYPE="CatmullRom"
 FILL_COLOR="b7bdf8"
+TRANSITION="random"
 
 # Get display list once
+local count=0
 until [ ${#DISPLAY_LIST[@]} -ge 1 ]; do
-    DISPLAY_LIST=($(swww query | grep -Po "^[^:]+"))
-    sleep 0.05s
+    if [$count -ge 500 ]; then
+        echo "Unable to find a display via swww query."
+        exit 1
+    fi
+    sleep 0.01s
+    DISPLAY_LIST=($(swww query | awk -F': ' '/^: / {print $2}'))
+    $count++
 done
+
 NUM_DISPLAYS=${#DISPLAY_LIST[@]}
+echo "Found displays: $DISPLAY_LIST"
 
 # Function to process a single wallpaper for a display
 process_wallpaper() {
     local img="$1"
     local display="$2"
+    printf "Attempting set:"
+    printf "\tImage: $img"
+    printf "\tDisplay: $display..."
     gowall convert "$img" $THEME - --format png |
-        swww img --resize="$RESIZE_TYPE" --fill-color="$FILL_COLOR" --outputs "$display" -
+        swww img --filter="$FILTER_TYPE" \
+            --transition-type="$TRANSITION" \
+            --resize="$RESIZE_TYPE" \
+            --fill-color="$FILL_COLOR" \
+            --outputs "$display" -
 }
 export -f process_wallpaper
-export THEME RESIZE_TYPE FILL_COLOR
+export THEME RESIZE_TYPE FILTER_TYPE TRANSITION FILL_COLOR
 
 # Function to get shuffled image list
 get_shuffled_images() {
