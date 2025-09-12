@@ -1,83 +1,133 @@
 #!/bin/bash
-
-# This script will randomly go through the files of a directory,
-# setting a different random wallpaper for each display
-# at regular intervals
-#
-# NOTE: this script is in bash (not posix shell), because the RANDOM variable
-# we use is not defined in posix
-
+# Multi-monitor wallpaper randomizer with GNU parallel support
 if [[ $# -lt 1 ]] || [[ ! -d $1 ]]; then
-    echo "Usage:
-    $0 <dir containing images>"
+    echo "Usage: $0 <dir containing images> [theme]"
     exit 1
 fi
 
-THEME="$2"
-if [[ "$2" == "" || $(gowall list | grep -c $THEME) -ne 1 ]]; then
-    THEME=""
-else
-    THEME="-t $THEME"
+# Validate and set theme
+THEME=""
+if [[ -n "$2" ]] && gowall list | grep -q "^$2$"; then
+    THEME="-t $2"
 fi
 
-# Make sure only 1 instance of swww_randomize
+# Single instance check
 PIDFILE=~/.local/state/swww-randomize-pidfile.txt
-if [ -e "${PIDFILE}" ]; then
-    OLD_PID="$(<${PIDFILE})"
-    if [ "X" != "X${OLD_PID}" -a -e "/proc/${OLD_PID}" ]; then
-        OLD_NAME="$(</proc/${OLD_PID}/comm)"
-        THIS_NAME="$(</proc/${BASHPID}/comm)"
-        if [ "${OLD_NAME}" = "${THIS_NAME}" ]; then
-            echo "old randomize process ${OLD_PID} is still running"
-            exit 1
-        else
-            echo "process with same ID as old randomize is running: \"${OLD_NAME}\"@${OLD_PID}"
-            echo "Replacing old process ID"
-        fi
+if [[ -e "$PIDFILE" ]]; then
+    OLD_PID="$(<$PIDFILE)"
+    if [[ -n "$OLD_PID" ]] && kill -0 "$OLD_PID" 2>/dev/null; then
+        echo "Another instance is already running (PID: $OLD_PID)"
+        exit 1
     fi
 fi
-echo "${BASHPID}" > ${PIDFILE}
+echo "$$" >"$PIDFILE"
+trap 'rm -f "$PIDFILE"' EXIT
 
-# Edit below to control the images transition
+# Configuration
 export SWWW_TRANSITION_FPS=144
 export SWWW_TRANSITION_STEP=6
-
-# This controls (in seconds) when to switch to the next image
 INTERVAL=300
-
-# Possible values:
-#    -   no:   Do not resize the image
-#    -   crop: Resize the image to fill the whole screen, cropping out parts that don't fit
-#    -   fit:  Resize the image to fit inside the screen, preserving the original aspect ratio
 RESIZE_TYPE="crop"
 FILL_COLOR="b7bdf8"
 
-DISPLAY_LIST=$(swww query | grep -Po "^[^:]+")
+# Get display list once
+until [ ${#DISPLAY_LIST[@]} -ge 1 ]; do
+    DISPLAY_LIST=($(swww query | grep -Po "^[^:]+"))
+    sleep 0.05s
+done
+NUM_DISPLAYS=${#DISPLAY_LIST[@]}
+
+# Function to process a single wallpaper for a display
+process_wallpaper() {
+    local img="$1"
+    local display="$2"
+    gowall convert "$img" $THEME - --format png |
+        swww img --resize="$RESIZE_TYPE" --fill-color="$FILL_COLOR" --outputs "$display" -
+}
+export -f process_wallpaper
+export THEME RESIZE_TYPE FILL_COLOR
+
+# Function to get shuffled image list
+get_shuffled_images() {
+    find "$1" -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.webp" -o -iname "*.bmp" \) \
+        -print0 | shuf -z | tr '\0' '\n'
+}
+
+echo "Starting wallpaper randomizer for ${NUM_DISPLAYS} display(s)"
 
 while true; do
-    find "$1" -type f \
-        | while read -r img; do
-            echo "$RANDOM:$img"
-        done \
-        | sort -n | cut -d':' -f2- \
-        | tee ~/.local/state/swww-randomize-list.txt \
-        | while read -r img; do
-            # Set a different image for each display
-            for disp in $DISPLAY_LIST; do
-                # if there is no image try to get one
-                if [ "X" = "X${img}" ]; then
-                    if read -r img; then
-                        true
-                    else # if there are no more images, refresh the list
-                        break 2
-                    fi
-                fi
+    # Get shuffled list of images
+    readarray -t images < <(get_shuffled_images "$1")
 
-                gowall convert $img $THEME - --format png \
-                    | swww img --resize=$RESIZE_TYPE --fill-color=$FILL_COLOR --outputs $disp -
-                # make sure each image is only used once
-                img=""
-            done
-            sleep $INTERVAL
+    if [[ ${#images[@]} -eq 0 ]]; then
+        echo "No images found in $1"
+        exit 1
+    fi
+
+    # Check if we have enough images for all displays
+    if [[ ${#images[@]} -lt $NUM_DISPLAYS ]]; then
+        echo "Warning: Only ${#images[@]} images found, but $NUM_DISPLAYS displays detected"
+        echo "Some displays will reuse images"
+    fi
+
+    # Save current list for reference
+    printf '%s\n' "${images[@]}" >~/.local/state/swww-randomize-list.txt
+
+    # Calculate how many complete cycles we can do
+    if [[ ${#images[@]} -ge $NUM_DISPLAYS ]]; then
+        CYCLES=$((${#images[@]} / NUM_DISPLAYS))
+        REMAINDER=$((${#images[@]} % NUM_DISPLAYS))
+    else
+        CYCLES=1
+        REMAINDER=0
+    fi
+
+    img_index=0
+
+    # Process complete cycles
+    for ((cycle = 0; cycle < CYCLES; cycle++)); do
+        echo "Cycle $((cycle + 1))/$CYCLES"
+
+        # Create array of image-display pairs for this cycle
+        pairs=()
+        current_images=()
+
+        for ((i = 0; i < NUM_DISPLAYS; i++)); do
+            current_img="${images[img_index]}"
+            current_images+=("$(basename "$current_img")")
+            pairs+=("$current_img ${DISPLAY_LIST[i]}")
+            ((img_index++))
         done
+
+        echo "Setting wallpapers: ${current_images[*]}"
+
+        # Process all displays in parallel with different images
+        printf '%s\n' "${pairs[@]}" |
+            parallel --colsep ' ' -j "$NUM_DISPLAYS" process_wallpaper {1} {2}
+
+        sleep "$INTERVAL"
+    done
+
+    # Handle remaining images if any
+    if [[ $REMAINDER -gt 0 ]]; then
+        echo "Processing remaining $REMAINDER images"
+
+        pairs=()
+        current_images=()
+
+        for ((i = 0; i < REMAINDER; i++)); do
+            current_img="${images[img_index]}"
+            current_images+=("$(basename "$current_img")")
+            pairs+=("$current_img ${DISPLAY_LIST[i]}")
+            ((img_index++))
+        done
+
+        echo "Setting wallpapers: ${current_images[*]}"
+
+        # Process remaining displays in parallel
+        printf '%s\n' "${pairs[@]}" |
+            parallel --colsep ' ' -j "$REMAINDER" process_wallpaper {1} {2}
+
+        sleep "$INTERVAL"
+    fi
 done
