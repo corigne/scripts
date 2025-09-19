@@ -16,17 +16,18 @@ print_usage() {
 }
 while getopts 'v' flag; do
   case "${flag}" in
-    v) export VERBOSE=true ;;
-    *) print_usage
-      exit 1 ;;
+  v) export VERBOSE=true ;;
+  *)
+    print_usage
+    exit 1
+    ;;
   esac
 done
 
-let i=0; let k=0
-for file in $shared_slideshow/*
-do
-  if (($i == ($(tput cols) - 1)))
-  then
+let i=0
+let k=0
+for file in $shared_slideshow/*; do
+  if (($i == ($(tput cols) - 1))); then
     echo
     i=0
   fi
@@ -34,11 +35,10 @@ do
   [ -f "$file" ] && sudo rm $file && ((i += 1)) && ((k += 1)) && printf "-"
 done
 
-i=0; k=0
-for file in $slideshow/*
-do
-  if (($i == ($(tput cols) - 1)))
-  then
+i=0
+k=0
+for file in $slideshow/*; do
+  if (($i == ($(tput cols) - 1))); then
     echo
     i=0
   fi
@@ -48,15 +48,13 @@ printf '\n%d files cleaned up...\n' $k
 echo
 
 echo '///////// TRANSFERRING //////////'
-let i=0; let k=0
-for dir in $dirs
-do
+let i=0
+let k=0
+for dir in ${dirs[@]}; do
   $VERBOSE && echo '\n////////  '$dir'  //////////'
   $VERBOSE && i=0
-  for file in $dir/*
-  do
-    if (( $i == ($(tput cols) - 1) ))
-    then
+  for file in $dir/*; do
+    if (($i == ($(tput cols) - 1))); then
       echo
       i=0
     fi
@@ -74,32 +72,32 @@ slideshow_files=$(mktemp)
 other_files=$(mktemp)
 
 # Get slideshow files (basename -> full path mapping)
-find "$slideshow" -type f -exec basename {} \; | sort > "$slideshow_files"
+find "$slideshow" -type f -exec basename {} \; | sort >"$slideshow_files"
 
 # Get other directory files (basename -> full path mapping)
 for dir in $dirs; do
-    find "$dir" -type f -exec basename {} \;
-done | sort > "$other_files"
+  find "$dir" -type f -exec basename {} \;
+done | sort >"$other_files"
 
 # Find duplicate basenames
 DUPE_BASENAMES="$(diff "$slideshow_files" "$other_files" | grep "^>" | sed 's/^> //')"
 
 if [ "$DUPE_BASENAMES" != "" ]; then
-    echo "Possible duplicates in filesystem:"
+  echo "Possible duplicates in filesystem:"
 
-    # For each duplicate basename, show full paths
-    echo "$DUPE_BASENAMES" | while read -r basename; do
-        echo "File: $basename"
+  # For each duplicate basename, show full paths
+  echo "$DUPE_BASENAMES" | while read -r basename; do
+    echo "File: $basename"
 
-        # Find in slideshow directory
-        find "$slideshow" -type f -name "$basename" -exec echo "  Slideshow: {}" \;
+    # Find in slideshow directory
+    find "$slideshow" -type f -name "$basename" -exec echo "  Slideshow: {}" \;
 
-        # Find in other directories
-        for dir in $dirs; do
-            find "$dir" -type f -name "$basename" -exec echo "  Other: {}" \;
-        done
-        echo
+    # Find in other directories
+    for dir in $dirs; do
+      find "$dir" -type f -name "$basename" -exec echo "  Other: {}" \;
     done
+    echo
+  done
 fi
 
 # Cleanup
