@@ -163,21 +163,14 @@ slideshow=$HOME'/Pictures/animated_slideshow/'
 pics=$HOME'/Pictures/'
 dirs=($(find $pics -type d -name animated -not -path "**/nsfw/**"))
 
-echo '//////// CLEANING UP' $slideshow '////////'
-let i=0; let k=0
-for file in $slideshow/*
-do
-  if (( $i == ( $(tput cols) - 1) ))
-  then
-    echo
-    i=0
-  fi
-  [ -e "$file" ] && rm $file && ((i += 1)) && ((k += 1)) && printf "-"
-done
-printf '\n%d files cleaned up...\n' $k
-echo
-
 echo '///////// PREPARING //////////'
+mapfile -d"\n" OLD_FILES < <(find $slideshow -name "*.gif")
+for file in ${OLD_FILES[@]}
+do
+  file=$(basename $file)
+done
+$VERBOSE && echo "Old set: ${OLD_FILES[@]}"
+NEW_FILES=()
 let i=0; let k=0
 for dir in ${dirs[@]}
 do
@@ -186,6 +179,8 @@ do
   for file in "$dir"/*
   do
     [ -f "$file" ] || continue
+    NEW_FILES+=$(basename $file)
+    [ -e "$slideshow$(basename $file)" ] && continue
     if (( $i == ($(tput cols) - 1) ))
     then
       echo
@@ -194,8 +189,23 @@ do
     [ -e "$file" ] && stylize_gif $file $slideshow && ((i += 1)) && ((k += 1)) && printf "+"
     $VERBOSE && echo $file
   done
+  # delete previously processed files which aren't in the incoming/existing files
+  DIFF=($(echo ${OLD_FILES[@]} ${NEW_FILES[@]} | tr ' ' '\n' | sort | uniq -u))
+$VERBOSE && echo "New set: ${NEW_FILES[@]}"
+$VERBOSE && echo "Diff set: ${DIFF[@]}"
+  let j=0 # number of deletions
+  for file in $(echo ${OLD_FILES[@]} ${DIFF[@]} | tr ' ' '\n' | sort | uniq -D | uniq)
+  do
+    if (( $i == ($(tput cols) - 1) ))
+    then
+      echo
+      i=0
+    fi
+    ((i += 1)) && ((j += 1)) && printf "-"
+    rm $slideshow$(basename $file)
+  done
 done
-printf '\n%d files transferred...\n' $k
+printf '\n%d files transferred, removed %d no longer in filesystem...\n' $k $j
 
 # Create temporary files to store filenames with their full paths
 slideshow_files=$(mktemp)

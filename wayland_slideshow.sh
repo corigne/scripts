@@ -52,10 +52,16 @@ process_wallpaper() {
         #     --resize="$RESIZE_TYPE" \
         #     --fill-color="$FILL_COLOR" \
         #     --outputs "$display" $img
-        mpvpaper \
-            -o "input-ipc-server=/tmp/mpv-socket-All  loop panscan=1.0 --mute=yes --background-color='#667788'" \
-            $display \
-            $img &
+        # Only start mpvpaper if it's not running
+        if ! pidof mpvpaper > /dev/null; then
+            mpvpaper --fork \
+                -o "input-ipc-server=/tmp/mpv-socket-All loop panscan=1.0 --mute=yes --fps=$SWWW_TRANSITION_FPS --background-color='#667788'" \
+                $display \
+                $img
+        else
+            # Send command to existing mpv instance to load new file
+            echo "loadfile \"$img\"" | socat - /tmp/mpv-socket-All
+        fi
     else
         # Use gowall for other image formats
         pkill mpvpaper
