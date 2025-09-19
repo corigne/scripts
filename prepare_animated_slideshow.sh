@@ -169,7 +169,8 @@ for file in ${OLD_FILES[@]}
 do
   file=$(basename $file)
 done
-$VERBOSE && echo "Old set: ${OLD_FILES[@]}"
+$VERBOSE && echo "Existing gifs:"
+$VERBOSE && printf "%s\n" ${OLD_FILES[@]}
 NEW_FILES=()
 let i=0; let k=0
 for dir in ${dirs[@]}
@@ -190,21 +191,24 @@ do
     $VERBOSE && echo $file
   done
   # delete previously processed files which aren't in the incoming/existing files
-  DIFF=($(echo ${OLD_FILES[@]} ${NEW_FILES[@]} | tr ' ' '\n' | sort | uniq -u))
+done
+
+DIFF=($(echo ${OLD_FILES[@]} ${NEW_FILES[@]} | tr ' ' '\n' | sort | uniq -u))
 $VERBOSE && echo "New set: ${NEW_FILES[@]}"
 $VERBOSE && echo "Diff set: ${DIFF[@]}"
-  let j=0 # number of deletions
-  for file in $(echo ${OLD_FILES[@]} ${DIFF[@]} | tr ' ' '\n' | sort | uniq -D | uniq)
-  do
-    if (( $i == ($(tput cols) - 1) ))
-    then
-      echo
-      i=0
-    fi
-    ((i += 1)) && ((j += 1)) && printf "-"
-    rm $slideshow$(basename $file)
-  done
+let j=0 # number of deletions
+for file in $(echo ${OLD_FILES[@]} ${DIFF[@]} | tr ' ' '\n' | sort | uniq -D | uniq)
+do
+  if (( $i == ($(tput cols) - 1) ))
+  then
+    echo
+    i=0
+  fi
+  ((i += 1)) && ((j += 1)) && printf "-"
+  echo Removing $slideshow$(basename $file)
+  rm $slideshow$(basename $file)
 done
+
 printf '\n%d files transferred, removed %d no longer in filesystem...\n' $k $j
 
 # Create temporary files to store filenames with their full paths
