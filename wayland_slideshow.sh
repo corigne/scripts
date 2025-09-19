@@ -52,9 +52,13 @@ process_wallpaper() {
         #     --resize="$RESIZE_TYPE" \
         #     --fill-color="$FILL_COLOR" \
         #     --outputs "$display" $img
-        waypaper --wallpaper $img
+        mpvpaper \
+            -o "input-ipc-server=/tmp/mpv-socket-All  loop panscan=1.0 --mute=yes --background-color='#667788'" \
+            $display \
+            $img &
     else
         # Use gowall for other image formats
+        pkill mpvpaper
         gowall convert "$img" $THEME - --format png |
             swww img --filter="$FILTER_TYPE" \
                 --transition-type="$transition_type" \
@@ -62,7 +66,6 @@ process_wallpaper() {
                 --fill-color="$FILL_COLOR" \
                 --outputs "$display" -
     fi
-
 }
 export -f process_wallpaper
 export THEME RESIZE_TYPE FILTER_TYPE TRANSITION FILL_COLOR
@@ -199,16 +202,16 @@ while true; do
         for ((i = 0; i < REMAINDER; i++)); do
             current_img="${images[img_index]}"
             current_images+=("$(basename "$current_img")")
-            pairs+=("$current_img ${DISPLAY_LIST[i]}")
+            pairs+=("$current_img;${DISPLAY_LIST[i]}")
             ((img_index++))
         done
+        echo ${pairs[@]}
 
         echo "Setting wallpapers: ${current_images[*]}"
 
         # Process remaining displays in parallel
         printf '%s\n' "${pairs[@]}" |
-            parallel --colsep ' ' -j "$REMAINDER" process_wallpaper {1} {2}
+            parallel --colsep ';' -j "$REMAINDER" process_wallpaper {1} {2}
     fi
-    return
     interruptible_sleep "$INTERVAL"
 done
