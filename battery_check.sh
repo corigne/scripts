@@ -1,9 +1,13 @@
 #!/bin/bash
 
-BAT_LOW=20
-BAT_CRITICAL=15
-BAT_CHECK_INTERVAL_SEC=60
+BAT_LOW=20                      # BAT PERCENT AT WHICH DIM, POWER PROFILE CHANGE, AND DIM
+BAT_CRITICAL=13                 # BAT PERCENT AT WHICH HIBERNATE
+BAT_CHECK_INTERVAL_SEC=60       # INTERVAL SCRIPT CHECKS BATTERY LEVEL
+                                ## VERY LOW VALUES MAY RESULT IN HIGHER BATTERY DRAIN
+
 DIMMED=false
+DIM_VALUE=15            # PERCENT BACKLIGHT WHEN DIMMED
+DEFAULT_BRIGHTNESS=100  # DEFALT BRIGHTNESS PLACEHOLDER
 
 check_battery () {
 
@@ -25,23 +29,37 @@ check_battery () {
         elif [ "$status" = Discharging ] && [ "$capacity" -le $BAT_LOW ]
         then
                 dunstify -u critical "Battery low! System will hibernate at $BAT_CRITICAL%."
-                echo 'Battery low!' >&1
-                sleep .5
-                if ! light -O; then
-                        echo "Warning: Failed to save brightness" >&2
+                echo 'Battery low, dimming screen!' >&1
+
+                sleep 1
+
+                #HANDLE DIMMING
+                if ! $DIMMED; then
+                        export PRE_DIM_VALUE=$(light -G)
                 fi
-                if ! light -S 15; then
-                        echo "Warning: Failed to dim screen" >&2
+                if ! ($DIMMED && light -S $DIM_VALUE); then
+                        echo "Warning: Failed to dim screen." >&2
                 else
                         DIMMED=true
                 fi
-                BAT_CHECK_INTERVAL_SEC=30
+
+                # HANDLE POWER SAVINGS
                 if ! tuned-adm profile laptop-battery-powersave; then
-                        echo "Warning: unable to change tuned profile to automatic selection."
+                        echo "Warning: unable to change tuned profile."
                 fi
+
         else
-                $DIMMED && DIMMED=false && light -I
-                BAT_CHECK_INTERVAL_SEC=60
+                # RESET BACKLIGHT
+                # POWER PROFILE RESTORATION HANDLED IN SEPPARATE SCRIPT...
+                # SEE: ~/.config/user-acpid/ac-power-on for more info.
+                if $DIMMED; then
+                        DIMMED=false
+                        if [ ! -z $PRE_DIM_VALUE ]; then
+                                light -S $PRE_DIM_VALUE
+                        else
+                                light -S $DEFAULT_BRIGHTNESS
+                        fi
+                fi
         fi
         return 0
 }
