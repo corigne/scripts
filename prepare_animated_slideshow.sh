@@ -117,20 +117,20 @@ stylize_gif () {
     return
   fi
 
-  if [ "$NEEDS_UPSCALE" = true ]; then
-    $VERBOSE && echo "Upscaling by $scale_factor"
-    for img in "$TMP_DIR"/processed; do
-      if [[ -f "$img" ]]; then
-        filename=$(basename "$img")
-        magick "$img" -filter Lanczos -resize ${scale_factor}00% "$TMP_DIR/processed/$filename"
-      fi
-    done
+ #  if [ "$NEEDS_UPSCALE" = true ]; then
+ #    $VERBOSE && echo "Upscaling by $scale_factor"
+ #    for img in "$TMP_DIR"/processed; do
+ #      if [[ -f "$img" ]]; then
+ #        filename=$(basename "$img")
+ #        magick "$img" -filter Lanczos -resize ${scale_factor}00% "$TMP_DIR/processed/$filename"
+ #      fi
+ #    done
 
-    if [ $? -ne 0 ]; then
-      echo "Error trying to upscale frames with ImageMagick."
-      return
-    fi
-  fi
+ #    if [ $? -ne 0 ]; then
+ #      echo "Error trying to upscale frames with ImageMagick."
+ #      return
+ #    fi
+ #  fi
 
   $VERBOSE && echo "Converting back to .gif"
   for img in "$TMP_DIR"/processed/*; do
