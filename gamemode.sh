@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-HYPRGAMEMODE=$(hyprctl getoption animations:enabled | awk 'NR==1{print $2}')
+export HYPRGAMEMODE=$(hyprctl getoption animations:enabled | awk 'NR==1{print $2}')
 if [ "$HYPRGAMEMODE" = 1 ]; then
     hyprctl --batch "\
         keyword animations:enabled 0;\
@@ -9,19 +9,8 @@ if [ "$HYPRGAMEMODE" = 1 ]; then
         keyword general:gaps_out 0;\
         keyword general:border_size 1;\
         keyword decoration:rounding 0"
-    echo killing hyprpanel
-    hyprpanel -q
-    swww kill
-    exit
+    kill -SIGUSR2 $(cat ~/.local/state/swww-randomize-pidfile.txt)
 else
-    echo Restoring swww-daemon
-    swww-daemon &
-    until swww query; do
-        sleep 0.1
-        kill -SIGUSR1 $(cat ~/.local/state/swww-randomize-pidfile.txt) &
-        sleep 0.1
-    done
-    echo restoring hyprpanel
-    hyprpanel &
+    kill -SIGUSR1 $(cat ~/.local/state/swww-randomize-pidfile.txt)
+    hyprctl reload
 fi
-hyprctl reload

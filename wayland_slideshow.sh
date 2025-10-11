@@ -13,6 +13,18 @@ graceful_shutdown() {
     exit 0
 }
 
+interrupt_sleep() {
+    $DEBUG && echo "Sleep interrupted, unpausing."
+    export PAUSED=false
+    pkill -P $$ sleep 2>/dev/null
+}
+
+pause_slideshow() {
+    $DEBUG && echo "Pausing slideshow."
+    export PAUSED=true
+    interruptible_sleep 7d
+}
+
 # Replace your sleep with an interruptible version
 interruptible_sleep() {
     local duration=$1
@@ -32,6 +44,10 @@ get_shuffled_images() {
 
 # Function to process a single wallpaper for a display
 process_wallpaper() {
+    if [[ $PAUSED == 1 ]]; then
+        printf "Skipping wallpaper paint while slideshow paused."
+        return 0
+    fi
     local img="$1"
     local display="$2"
     printf "Calling swww img:\n"
@@ -52,17 +68,6 @@ process_wallpaper() {
             --resize="$RESIZE_TYPE" \
             --fill-color="$FILL_COLOR" \
             --outputs "$display" $img
-
-        # Only start mpvpaper if it's not running
-        # if ! pidof mpvpaper > /dev/null; then
-        #     mpvpaper --fork \
-        #         -o "input-ipc-server=/tmp/mpv-socket-All loop panscan=1.0 --mute=yes --fps=$SWWW_TRANSITION_FPS --background-color='#667788'" \
-        #         $display \
-        #         $img
-        # else
-        #     # Send command to existing mpv instance to load new file
-        #     echo "loadfile \"$img\"" | socat - /tmp/mpv-socket-All
-        # fi
     else
         # Use gowall for other image formats
         pkill mpvpaper
@@ -93,8 +98,11 @@ export FIRST_PAINT=true
 export SWWW_TRANSITION_FPS=144
 export SWWW_TRANSITION_STEP=90
 
+export PAUSED=false
+
 trap graceful_shutdown SIGTERM
-trap 'pkill -P $$ sleep 2>/dev/null' SIGUSR1
+trap interrupt_sleep SIGUSR1
+trap pause_slideshow SIGUSR2
 
 if [[ $# -lt 1 ]] || [[ ! -d $1 ]]; then
     echo "Usage: $0 <dir containing images> [theme]"
