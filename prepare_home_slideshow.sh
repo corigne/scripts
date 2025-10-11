@@ -28,7 +28,7 @@ do
     echo
     i=0
   fi
-  [ -e "$file" ] && rm $file && ((i += 1)) && ((k += 1)) && printf "-"
+  [ -e "$file" ] && rm "$file" && ((i += 1)) && ((k += 1)) && printf "-"
 done
 printf '\n%d files cleaned up...\n' $k
 echo
@@ -46,7 +46,7 @@ do
       echo
       i=0
     fi
-    [ -e "$file" ] && cp $file $slideshow && ((i += 1)) && ((k += 1)) && printf "+"
+    [ -e "$file" ] && cp "$file" "$slideshow" && ((i += 1)) && ((k += 1)) && printf "+"
   done
 done
 printf '\n%d files transferred...\n' $k

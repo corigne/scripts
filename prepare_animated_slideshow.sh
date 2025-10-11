@@ -95,7 +95,7 @@ stylize_gif () {
   fi
 
   TMP_FILENAME=$TMP_DIR/$(basename $FILE)
-  cp $FILE $TMP_FILENAME
+  cp "$FILE" "$TMP_FILENAME"
   gifsicle --explode --unoptimize $TMP_FILENAME --output="$TMP_DIR/frames/frame"
   if [[ ! $? -eq 0 ]]; then
     echo "Error exploding gif: $FILE."
@@ -137,7 +137,7 @@ stylize_gif () {
     if [[ -f "$img" ]]; then
       filename=$(basename "$img")
       magick "$img" "$TMP_DIR/processed/$(basename -s .png $filename).gif"
-      rm $img
+      rm "$img"
     fi
   done
 

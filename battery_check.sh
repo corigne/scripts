@@ -25,7 +25,7 @@ check_battery () {
                 dunstify -u critical "Critical battery threshold, hibernating..."
                 echo "Critical battery threshold, hibernating..."
                 sleep 5
-                systemctl hibernate
+                systemctl suspend-then-hibernate
         elif [ "$status" = Discharging ] && [ "$capacity" -le $BAT_LOW ]
         then
                 dunstify -u critical "Battery low! System will hibernate at $BAT_CRITICAL%."

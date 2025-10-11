@@ -32,7 +32,7 @@ for file in $shared_slideshow/*; do
     i=0
   fi
   echo -n '-'
-  [ -f "$file" ] && sudo rm $file && ((i += 1)) && ((k += 1)) && printf "-"
+  [ -f "$file" ] && sudo rm "$file" && ((i += 1)) && ((k += 1)) && printf "-"
 done
 
 i=0
@@ -42,7 +42,7 @@ for file in $slideshow/*; do
     echo
     i=0
   fi
-  [ -f "$file" ] && rm $file && ((i += 1)) && ((k += 1)) && printf "-"
+  [ -f "$file" ] && rm "$file" && ((i += 1)) && ((k += 1)) && printf "-"
 done
 printf '\n%d files cleaned up...\n' $k
 echo
@@ -59,8 +59,8 @@ for dir in ${dirs[@]}; do
       i=0
     fi
     [ -f "$file" ] &&
-      cp $file $slideshow &&
-      sudo cp $file $shared_slideshow &&
+      cp "$file" "$slideshow" &&
+      sudo cp "$file" "$shared_slideshow" &&
       ((i += 1)) && ((k += 1)) &&
       printf '+'
   done
