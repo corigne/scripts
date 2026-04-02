@@ -1,16 +1,21 @@
 #!/bin/bash
 # prepare_slideshows.sh
 #
-# Prepares wallpaper and animated GIF slideshows by syncing files from
-# categorised source directories into their respective destination directories.
+# Incrementally syncs wallpaper and animated GIF slideshows from categorised
+# source directories.  Only copies new files and removes orphans — never
+# redundantly re-copies unchanged files.
+#
+# The animated section recolours each GIF with gowall before placing it in
+# its destination; all other sections perform a plain file copy.
 #
 # Three sections (all run by default):
-#   --home      ~/Pictures/slideshow/           ← all wallpaper/ subdirs
+#   --home      ~/Pictures/slideshow/
+#               ← all wallpaper/ subdirs under ~/Pictures
 #   --sfw       ~/Pictures/sfw/ + /usr/share/backgrounds/slideshow/
 #               ← wallpaper/ subdirs excluding **/questionable/**
+#               (requires passwordless sudo for the shared system directory)
 #   --animated  ~/Pictures/animated_slideshow/
-#               ← animated/ subdirs excluding **/nsfw/**, GIFs are
-#                 recoloured with gowall before being copied
+#               ← animated/ subdirs excluding **/nsfw/**
 #
 # Usage: prepare_slideshows.sh [-v] [-j N] [-t THEME] [--home] [--sfw] [--animated]
 
@@ -19,11 +24,12 @@
 GOWALL_THEME="cat-frappe"
 VERBOSE=false
 
-# Parallel jobs for GIF processing.  Benchmarks on the 9800X3D show j=2
-# gives near-perfect 2× speedup over sequential; j=4 adds a small gain on
-# top.  Clamping nproc/2 to [2, 4] keeps the default conservative enough
-# for mobile CPUs (e.g. the pang12/13 reports nproc=16 but has far lower
-# sustained per-core throughput than a desktop chip).
+# Default parallel jobs: nproc/2 clamped to [2, 4].
+# Benchmarks on the 9800X3D show j=2 gives near-perfect 2× speedup over
+# sequential; j=4 adds a small further gain.  The upper clamp keeps the
+# default conservative enough for mobile CPUs — the pang12/13 reports
+# nproc=16 but has much lower sustained per-core throughput than a desktop.
+# Override with -j N.
 _half=$(( $(nproc) / 2 ))
 PARALLEL_JOBS=$(( _half < 2 ? 2 : _half > 4 ? 4 : _half ))
 unset _half
@@ -38,16 +44,16 @@ print_usage() {
   printf 'Usage: prepare_slideshows [options] [--home] [--sfw] [--animated]
 
 Options:
-  -j N      Parallel jobs for animated GIF processing (default: %d, auto from nproc)
-  -t THEME  gowall theme applied to animated GIFs (default: %s)
+  -j N      Parallel jobs for animated GIF processing (default: %d)
+  -t THEME  gowall theme for animated GIFs (default: %s)
   -v        Verbose output
-  --home      Prepare home slideshow only
-  --sfw       Prepare SFW slideshow only
-  --animated  Prepare animated slideshow only
+  --home      Sync home wallpaper slideshow only
+  --sfw       Sync SFW slideshow only
+  --animated  Sync animated GIF slideshow only
   (no flags)  Run all three sections\n' "$PARALLEL_JOBS" "$GOWALL_THEME"
 }
 
-# getopts only handles short flags; strip long flags out first.
+# Handle long options first (getopts only understands short flags).
 for arg in "$@"; do
   case "$arg" in
     --home)     RUN_HOME=true ;;
@@ -56,8 +62,12 @@ for arg in "$@"; do
     --help)     print_usage; exit 0 ;;
   esac
 done
-# Re-set positional params to only the short flags so getopts can parse them.
-eval set -- "$(printf '%s\n' "$@" | grep -v '^--')"
+
+# Rebuild positional params without long flags so getopts can process the rest.
+_remaining=()
+for arg in "$@"; do [[ "$arg" == --* ]] || _remaining+=("$arg"); done
+set -- "${_remaining[@]}"
+unset _remaining
 
 while getopts 'j:t:v' flag; do
   case "$flag" in
@@ -68,7 +78,6 @@ while getopts 'j:t:v' flag; do
   esac
 done
 
-# Default to all sections when none are explicitly requested.
 if ! $RUN_HOME && ! $RUN_SFW && ! $RUN_ANIMATED; then
   RUN_HOME=true; RUN_SFW=true; RUN_ANIMATED=true
 fi
@@ -76,72 +85,158 @@ fi
 # Export variables consumed by stylize_gif, which runs in parallel subshells.
 export GOWALL_THEME VERBOSE
 
+# ── Dependency check ──────────────────────────────────────────────────────────
+
+_check_deps() {
+  local -a missing=()
+
+  # rsync is used to mirror the SFW slideshow to the shared system directory.
+  $RUN_SFW && command -v rsync &>/dev/null || { $RUN_SFW && missing+=(rsync); }
+
+  # These tools are only needed for the animated section.
+  if $RUN_ANIMATED; then
+    for cmd in parallel gowall gifsicle magick bc file; do
+      command -v "$cmd" &>/dev/null || missing+=("$cmd")
+    done
+  fi
+
+  if (( ${#missing[@]} > 0 )); then
+    printf 'Error: missing required tools: %s\n' "${missing[*]}" >&2
+    exit 1
+  fi
+}
+_check_deps
+
 # ── Cleanup trap ──────────────────────────────────────────────────────────────
 
-# All temp dirs created inside stylize_gif live under WORK_DIR so a single
-# rm -rf on exit covers everything, including interrupted parallel jobs.
+# All temp dirs created by stylize_gif live under WORK_DIR, so a single
+# rm -rf on exit covers everything including any interrupted parallel jobs.
 WORK_DIR=$(mktemp -d)
 export WORK_DIR
 _cleanup() { rm -rf "$WORK_DIR"; }
 trap _cleanup EXIT SIGINT SIGTERM
 
-# ── Shared helper: duplicate basename check ───────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
-# Reports source files whose basenames collide, meaning only the last copy
-# wins when syncing into a flat destination directory.
+# Emit sorted array contents.  Produces no output for empty arrays, which
+# prevents spurious empty-line ghost matches when used in comm process
+# substitutions.
+_sorted() { (( $# )) && printf '%s\n' "$@" | sort; }
+
+# Report source files whose basenames collide across source directories.
+# In a flat destination only the last copy of a duplicate name survives.
 check_duplicates() {
   local dest="$1"; shift
   local -a dirs=("$@")
 
   local sf of
   sf=$(mktemp); of=$(mktemp)
-
-  find "$dest" -type f -exec basename {} \; | sort > "$sf"
+  find "$dest" -maxdepth 1 -type f -exec basename {} \; | sort > "$sf"
   for dir in "${dirs[@]}"; do
     find "$dir" -maxdepth 1 -type f -exec basename {} \;
   done | sort > "$of"
 
-  # comm -13: lines present only in the second file (source dirs).
-  # After a full sync these are basenames that didn't survive into dest,
-  # which only happens when two source files share the same name.
+  # comm -13: lines only in the second file (source dirs).  After a full sync
+  # these are basenames that didn't survive into dest due to a name collision.
   local dupes
   dupes=$(comm -13 "$sf" "$of")
-
   if [[ -n "$dupes" ]]; then
-    echo "⚠ Duplicate filenames detected (only the last copy was kept):"
+    echo "⚠ Duplicate filenames (last copy wins):"
     while IFS= read -r name; do
       echo "  $name"
-      find "$dest" -type f -name "$name" -exec echo "    dest:   {}" \;
+      find "$dest" -maxdepth 1 -type f -name "$name" -exec echo "    dest:   {}" \;
       for dir in "${dirs[@]}"; do
         find "$dir" -maxdepth 1 -type f -name "$name" -exec echo "    source: {}" \;
       done
     done <<< "$dupes"
     echo
   fi
-
   rm -f "$sf" "$of"
 }
 
-# ── GIF styliser ──────────────────────────────────────────────────────────────
+# ── Copy steps ────────────────────────────────────────────────────────────────
 
-# Recolours a single GIF using the gowall theme.  The pipeline is:
-#   gifsicle --explode  →  per-frame .gif files
-#   magick              →  convert each frame to .png (gowall requires PNG)
-#   gowall convert      →  apply colour theme across the frames directory
-#   magick              →  convert processed .png frames back to .gif
-#   gifsicle (reassemble) →  stitch frames together with original delays
+# Plain copy: used for static wallpaper slideshows.
+# Receives (dest, file…) for files confirmed absent from dest.
+_copy_plain() {
+  local dest="$1"; shift
+  printf '%d file(s) to copy…\n' "$#"
+  printf '%s\0' "$@" | xargs -0 cp -ft "$dest"
+}
+
+# GIF processing copy step: recolour each GIF with gowall, then place in dest.
+# stylize_gif is exported so GNU parallel can invoke it in subshells.
+_copy_gif() {
+  local dest="$1"; shift
+  printf 'Processing %d new GIF(s) with %d parallel job(s)…\n' "$#" "$PARALLEL_JOBS"
+  printf '%s\n' "$@" | parallel --jobs "$PARALLEL_JOBS" --bar stylize_gif {} "$dest"
+}
+
+# ── Core sync engine ──────────────────────────────────────────────────────────
+
+# Incrementally syncs a flat destination directory from one or more source dirs:
+#   new files  (in any source, absent from dest)  → passed to copy_fn
+#   orphans    (in dest, absent from all sources)  → deleted
+#   duplicates (same basename across source dirs)  → reported
 #
-# Runs inside GNU parallel subshells; needs GOWALL_THEME, VERBOSE, WORK_DIR
-# exported by the parent.  Each invocation creates its own subdirectory under
-# WORK_DIR so jobs are fully isolated and the parent EXIT trap cleans up all
-# of them in one shot.
+# Usage: sync_slideshow dest copy_fn source_dir [source_dir …]
+sync_slideshow() {
+  local dest="$1" copy_fn="$2"; shift 2
+  local -a dirs=("$@")
+
+  # Snapshot current dest basenames so we can detect orphans after the scan.
+  local -a old_files
+  mapfile -t old_files < <(find "$dest" -maxdepth 1 -type f -exec basename {} \;)
+
+  # Walk each source dir one level deep to build the canonical source name set
+  # and identify files not yet present in dest.
+  local name
+  local -a new_files to_copy
+  for dir in "${dirs[@]}"; do
+    $VERBOSE && echo "Scanning $dir …"
+    for file in "$dir"/*; do
+      [[ -f "$file" ]] || continue
+      name=$(basename "$file")
+      new_files+=("$name")
+      [[ -e "$dest/$name" ]] || to_copy+=("$file")
+    done
+  done
+
+  if (( ${#to_copy[@]} > 0 )); then
+    "$copy_fn" "$dest" "${to_copy[@]}"
+  else
+    echo "Nothing new."
+  fi
+
+  # comm -23 <(old|sorted) <(new|sorted): lines only in old = orphans.
+  local -a orphaned
+  mapfile -t orphaned < <(comm -23 <(_sorted "${old_files[@]}") <(_sorted "${new_files[@]}"))
+
+  for f in "${orphaned[@]}"; do
+    echo "Removing orphan: $f"
+    rm "$dest/$f"
+  done
+
+  printf '%d synced, %d orphans removed\n' "${#to_copy[@]}" "${#orphaned[@]}"
+  check_duplicates "$dest" "${dirs[@]}"
+}
+
+# ── GIF styliser (exported for GNU parallel) ──────────────────────────────────
+
+# Recolours a single GIF with the configured gowall theme.  Pipeline:
+#   gifsicle --explode  →  per-frame .gif files
+#   magick              →  each frame .gif → .png  (gowall requires PNG input)
+#   gowall convert      →  apply colour theme to the whole frames directory
+#   magick              →  each processed .png → .gif
+#   gifsicle            →  reassemble frames with their original per-frame delays
+#
+# Runs in GNU parallel subshells; GOWALL_THEME, VERBOSE, WORK_DIR must be
+# exported.  Each call gets its own isolated subdirectory under WORK_DIR.
 stylize_gif() {
   local file="$1" dest="$2"
+  local label="[$(basename "$file")]"
 
   [[ $(file --mime-type -b "$file") == "image/gif" ]] || return 0
-
-  local label
-  label="[$(basename "$file")]"
 
   local tmp
   tmp=$(mktemp -d -p "$WORK_DIR")
@@ -170,7 +265,7 @@ stylize_gif() {
 
   local frame_count
   frame_count=$(find "$tmp/frames" -name '*.png' | wc -l)
-  $VERBOSE && echo "$label gowall $frame_count frames → $GOWALL_THEME"
+  $VERBOSE && echo "$label gowall: $frame_count frames → $GOWALL_THEME"
 
   gowall convert --dir "$tmp/frames" -t "$GOWALL_THEME" \
     --output="$tmp/processed" 1>/dev/null || {
@@ -184,8 +279,8 @@ stylize_gif() {
     magick "$img" "$tmp/processed/$(basename "$img" .png).gif" && rm "$img"
   done
 
-  # Reassemble: pair each frame file with its original delay in centiseconds
-  # (gifsicle's internal unit; source delays are in seconds).
+  # Reassemble: pair each frame with its original delay in centiseconds
+  # (gifsicle's internal unit; gifsicle --info reports delays in seconds).
   $VERBOSE && echo "$label reassembling…"
   local -a cmd_args=()
   local i frame delay_cs
@@ -205,27 +300,15 @@ stylize_gif() {
 }
 export -f stylize_gif
 
-# ── Section: home slideshow ───────────────────────────────────────────────────
+# ── Section runners ───────────────────────────────────────────────────────────
 
 run_home() {
-  local slideshow="$HOME/Pictures/slideshow/"
   local -a dirs
   mapfile -t dirs < <(find "$HOME/Pictures" -type d -name wallpaper)
-
   echo "════════ HOME SLIDESHOW ════════"
-
-  local k
-  k=$(find "$slideshow" -mindepth 1 -type f -delete -print | wc -l)
-  printf 'Cleaned %d existing files\n' "$k"
-
-  find "${dirs[@]}" -maxdepth 1 -type f -print0 | xargs -0 cp -ft "$slideshow"
-  printf 'Transferred %d files\n' "$(find "$slideshow" -maxdepth 1 -type f | wc -l)"
-
-  check_duplicates "$slideshow" "${dirs[@]}"
+  sync_slideshow "$HOME/Pictures/slideshow/" _copy_plain "${dirs[@]}"
   echo
 }
-
-# ── Section: SFW slideshow ────────────────────────────────────────────────────
 
 run_sfw() {
   local slideshow="$HOME/Pictures/sfw/"
@@ -236,76 +319,24 @@ run_sfw() {
   )
 
   echo "════════ SFW SLIDESHOW ════════"
+  sync_slideshow "$slideshow" _copy_plain "${dirs[@]}"
 
-  local k
-  k=$(find "$slideshow" -mindepth 1 -type f -delete -print | wc -l)
-  sudo find "$shared" -mindepth 1 -type f -delete
-  printf 'Cleaned %d user files\n' "$k"
-
-  find "${dirs[@]}" -maxdepth 1 -type f -print0 | xargs -0 cp -ft "$slideshow"
-  # Batch the privileged copies in one find+exec to avoid a sudo fork per file.
-  sudo find "$slideshow" -type f -exec cp -t "$shared" {} +
-
-  printf 'Transferred %d files\n' "$(find "$slideshow" -maxdepth 1 -type f | wc -l)"
-
-  check_duplicates "$slideshow" "${dirs[@]}"
+  # rsync --delete mirrors the user slideshow to the shared system directory,
+  # handling both new additions and orphan removal in a single pass.
+  # This is where rsync genuinely wins over manual comm logic.
+  printf 'Syncing to shared directory…\n'
+  sudo rsync --archive --delete "$slideshow" "$shared"
   echo
 }
 
-# ── Section: animated slideshow ───────────────────────────────────────────────
-
 run_animated() {
-  local slideshow="$HOME/Pictures/animated_slideshow/"
   local -a dirs
   mapfile -t dirs < <(
     find "$HOME/Pictures" -type d -name animated -not -path '**/nsfw/**'
   )
-
   echo "════════ ANIMATED SLIDESHOW ════════"
   printf 'Jobs: %d  |  Theme: %s\n\n' "$PARALLEL_JOBS" "$GOWALL_THEME"
-
-  # Snapshot what's already in the destination so we can do an incremental
-  # sync (skip already-processed GIFs) and detect orphans afterwards.
-  local -a old_files
-  mapfile -t old_files < <(find "$slideshow" -name '*.gif' -exec basename {} \;)
-  $VERBOSE && printf 'Existing GIFs in dest: %d\n' "${#old_files[@]}"
-
-  local -a new_files to_process
-  for dir in "${dirs[@]}"; do
-    $VERBOSE && echo "Scanning $dir …"
-    for file in "$dir"/*; do
-      [[ -f "$file" ]] || continue
-      local name; name=$(basename "$file")
-      new_files+=("$name")
-      # Only queue files not already present in the destination.
-      [[ -e "$slideshow/$name" ]] || to_process+=("$file")
-    done
-  done
-
-  local k="${#to_process[@]}"
-  if (( k > 0 )); then
-    printf 'Processing %d new GIF(s) with %d parallel job(s)…\n' "$k" "$PARALLEL_JOBS"
-    printf '%s\n' "${to_process[@]}" \
-      | parallel --jobs "$PARALLEL_JOBS" --bar stylize_gif {} "$slideshow"
-  else
-    echo "No new GIFs to process."
-  fi
-
-  # Remove files that were previously processed but no longer exist in any
-  # source directory.  comm -23 outputs lines present only in OLD (sorted).
-  local -a orphaned
-  mapfile -t orphaned < <(comm -23 \
-    <(printf '%s\n' "${old_files[@]}" | sort) \
-    <(printf '%s\n' "${new_files[@]}"  | sort))
-
-  local j="${#orphaned[@]}"
-  for f in "${orphaned[@]}"; do
-    echo "Removing orphan: $f"
-    rm "$slideshow/$f"
-  done
-
-  printf '%d processed, %d orphans removed\n' "$k" "$j"
-  check_duplicates "$slideshow" "${dirs[@]}"
+  sync_slideshow "$HOME/Pictures/animated_slideshow/" _copy_gif "${dirs[@]}"
   echo
 }
 
