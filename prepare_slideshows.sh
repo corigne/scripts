@@ -91,7 +91,9 @@ _check_deps() {
   local -a missing=()
 
   # rsync is used to mirror the SFW slideshow to the shared system directory.
-  $RUN_SFW && command -v rsync &>/dev/null || { $RUN_SFW && missing+=(rsync); }
+  if $RUN_SFW; then
+    command -v rsync &>/dev/null || missing+=(rsync)
+  fi
 
   # These tools are only needed for the animated section.
   if $RUN_ANIMATED; then
@@ -342,6 +344,8 @@ run_animated() {
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-$RUN_SFW      && run_sfw
-$RUN_HOME     && run_home
-$RUN_ANIMATED && run_animated
+# Use if-blocks rather than `$FLAG && run_fn` to avoid the false &&
+# short-circuit producing a non-zero exit code when a section is skipped.
+if $RUN_SFW;      then run_sfw;      fi
+if $RUN_HOME;     then run_home;     fi
+if $RUN_ANIMATED; then run_animated; fi
