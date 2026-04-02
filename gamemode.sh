@@ -9,8 +9,8 @@ if [ "$HYPRGAMEMODE" = 1 ]; then
         keyword general:gaps_out 0;\
         keyword general:border_size 1;\
         keyword decoration:rounding 0"
-    kill -SIGUSR2 $(cat ~/.local/state/swww-randomize-pidfile.txt)
+    kill -SIGUSR2 $(cat /tmp/swww-randomize-pidfile.txt)
 else
-    kill -SIGUSR1 $(cat ~/.local/state/swww-randomize-pidfile.txt)
+    kill -SIGUSR1 $(cat /tmp/swww-randomize-pidfile.txt)
     hyprctl reload
 fi

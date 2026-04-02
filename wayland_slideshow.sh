@@ -116,7 +116,7 @@ fi
 echo "Using theme: $THEME"
 
 # Single instance check
-PIDFILE=~/tmp/swww-randomize-pidfile.txt
+PIDFILE=/tmp/swww-randomize-pidfile.txt
 if [[ -e "$PIDFILE" ]]; then
     OLD_PID="$(<$PIDFILE)"
     if [[ -n "$OLD_PID" ]] && kill -0 "$OLD_PID" 2>/dev/null; then
@@ -165,7 +165,7 @@ while true; do
     fi
 
     # Save current list for reference
-    printf '%s\n' "${images[@]}" >~/tmp/swww-randomize-list.txt
+    printf '%s\n' "${images[@]}" >/tmp/swww-randomize-list.txt
 
     # Calculate how many complete cycles we can do
     if [[ ${#images[@]} -ge $NUM_DISPLAYS ]]; then
