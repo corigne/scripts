@@ -1,0 +1,62 @@
+#!/bin/bash
+# thunar-extract-here: Extract archives to their own directory (Extract Here)
+# Usage: thunar-extract-here <file1> [file2 ...]
+
+TMPFILE=$(mktemp /tmp/extract-list.XXXXXX)
+printf '%s\0' "$@" > "$TMPFILE"
+
+INNER=$(cat << 'INNERSCRIPT'
+FAILED=0
+NAMES=()
+
+while IFS= read -r -d '' FILE; do
+    BASENAME="$(basename "$FILE")"
+    DIR="$(dirname "$FILE")"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  Extracting: $BASENAME"
+    echo "  Into:       $DIR"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo
+    /usr/bin/7z x "$FILE" -o"$DIR"
+    EXIT=$?
+    echo
+    if [ $EXIT -eq 0 ]; then
+        echo "✓ Done: $BASENAME"
+        NAMES+=("$BASENAME")
+    else
+        echo "✗ FAILED: $BASENAME (exit code $EXIT)"
+        FAILED=1
+    fi
+    echo
+done < "REPLACE_TMPFILE"
+
+rm -f "REPLACE_TMPFILE"
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+if [ $FAILED -eq 0 ]; then
+    COUNT="${#NAMES[@]}"
+    echo "  All $COUNT extraction(s) complete."
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    ACTIVE_TITLE=$(/usr/bin/hyprctl activewindow -j 2>/dev/null | /usr/bin/jq -r '.title // empty')
+    if [[ "$ACTIVE_TITLE" != "Extract Here" ]]; then
+        /usr/bin/notify-send -i utilities-file-archiver \
+            "Extraction Complete" \
+            "$COUNT archive(s) extracted successfully"
+    fi
+else
+    echo "  Some extractions FAILED — see output above."
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    /usr/bin/notify-send -u critical -i dialog-error \
+        "Extraction Failed" \
+        "One or more archives failed to extract"
+    echo
+    echo "Press Enter to close..."
+    read -r
+fi
+INNERSCRIPT
+)
+
+# Embed the actual tmpfile path into the inner script
+INNER="${INNER//REPLACE_TMPFILE/$TMPFILE}"
+
+/usr/bin/ghostty --title="Extract Here" --class="io.nexus.thunarextract" -e bash -c "$INNER" &
