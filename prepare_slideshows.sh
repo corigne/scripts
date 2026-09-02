@@ -181,9 +181,11 @@ _copy_gif() {
 #   orphans    (in dest, absent from all sources)  → deleted
 #   duplicates (same basename across source dirs)  → reported
 #
-# Usage: sync_slideshow dest copy_fn source_dir [source_dir …]
+# Usage: sync_slideshow dest copy_fn exclude_exts source_dir [source_dir …]
+#   exclude_exts  space-separated list of extensions to skip (e.g. "gif webm mp4"),
+#                 or "" to skip nothing.
 sync_slideshow() {
-  local dest="$1" copy_fn="$2"; shift 2
+  local dest="$1" copy_fn="$2" exclude_exts="$3"; shift 3
   local -a dirs=("$@")
 
   # Snapshot current dest basenames so we can detect orphans after the scan.
@@ -199,6 +201,15 @@ sync_slideshow() {
     for file in "$dir"/*; do
       [[ -f "$file" ]] || continue
       name=$(basename "$file")
+      # Skip excluded extensions (e.g. animated formats in static slideshows).
+      if [[ -n "$exclude_exts" ]]; then
+        local ext="${name##*.}"
+        local skip=false
+        for _ex in $exclude_exts; do
+          [[ "${ext,,}" == "${_ex,,}" ]] && skip=true && break
+        done
+        $skip && continue
+      fi
       new_files+=("$name")
       [[ -e "$dest/$name" ]] || to_copy+=("$file")
     done
@@ -308,7 +319,7 @@ run_home() {
   local -a dirs
   mapfile -t dirs < <(find "$HOME/Pictures" -type d -name wallpaper)
   echo "════════ HOME SLIDESHOW ════════"
-  sync_slideshow "$HOME/Pictures/slideshow/" _copy_plain "${dirs[@]}"
+  sync_slideshow "$HOME/Pictures/slideshow/" _copy_plain "gif webm mp4 webp swf" "${dirs[@]}"
   echo
 }
 
@@ -321,7 +332,7 @@ run_sfw() {
   )
 
   echo "════════ SFW SLIDESHOW ════════"
-  sync_slideshow "$slideshow" _copy_plain "${dirs[@]}"
+  sync_slideshow "$slideshow" _copy_plain "gif webm mp4 webp swf" "${dirs[@]}"
 
   # rsync --delete mirrors the user slideshow to the shared system directory,
   # handling both new additions and orphan removal in a single pass.
@@ -338,7 +349,7 @@ run_animated() {
   )
   echo "════════ ANIMATED SLIDESHOW ════════"
   printf 'Jobs: %d  |  Theme: %s\n\n' "$PARALLEL_JOBS" "$GOWALL_THEME"
-  sync_slideshow "$HOME/Pictures/animated_slideshow/" _copy_gif "${dirs[@]}"
+  sync_slideshow "$HOME/Pictures/animated_slideshow/" _copy_gif "" "${dirs[@]}"
   echo
 }
 

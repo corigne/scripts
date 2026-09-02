@@ -9,6 +9,11 @@ DIMMED=false
 DIM_VALUE=15            # PERCENT BACKLIGHT WHEN DIMMED
 DEFAULT_BRIGHTNESS=100  # DEFALT BRIGHTNESS PLACEHOLDER
 
+LOW_NOTIFIED=false
+CRITICAL_NOTIFIED=false
+NOTIF_ID_LOW=9990       # dunstify replace-ID for low battery notification
+NOTIF_ID_CRITICAL=9991  # dunstify replace-ID for critical battery notification
+
 check_battery () {
 
         local status=$1
@@ -22,25 +27,31 @@ check_battery () {
 
         if [ "$status" = Discharging ] && [ "$capacity" -le $BAT_CRITICAL ]
         then
-                dunstify -u critical "Critical battery threshold, hibernating..."
+                if ! $CRITICAL_NOTIFIED; then
+                        dunstify -u critical -r $NOTIF_ID_CRITICAL "Critical battery threshold, hibernating..."
+                        CRITICAL_NOTIFIED=true
+                fi
                 echo "Critical battery threshold, hibernating..."
                 sleep 5
                 systemctl suspend-then-hibernate
         elif [ "$status" = Discharging ] && [ "$capacity" -le $BAT_LOW ]
         then
-                dunstify -u critical "Battery low! System will hibernate at $BAT_CRITICAL%."
+                if ! $LOW_NOTIFIED; then
+                        dunstify -u critical -r $NOTIF_ID_LOW "Battery low! System will hibernate at $BAT_CRITICAL%."
+                        LOW_NOTIFIED=true
+                fi
                 echo 'Battery low, dimming screen!' >&1
 
                 sleep 1
 
                 #HANDLE DIMMING
                 if ! $DIMMED; then
-                        export PRE_DIM_VALUE=$(light -G)
-                fi
-                if ! ($DIMMED && light -S $DIM_VALUE); then
-                        echo "Warning: Failed to dim screen." >&2
-                else
-                        DIMMED=true
+                        PRE_DIM_VALUE=$(light -G)
+                        if light -S $DIM_VALUE; then
+                                DIMMED=true
+                        else
+                                echo "Warning: Failed to dim screen." >&2
+                        fi
                 fi
 
                 # HANDLE POWER SAVINGS
@@ -49,9 +60,12 @@ check_battery () {
                 fi
 
         else
-                # RESET BACKLIGHT
+                # RESET NOTIFICATION FLAGS AND BACKLIGHT
                 # POWER PROFILE RESTORATION HANDLED IN SEPPARATE SCRIPT...
                 # SEE: ~/.config/user-acpid/ac-power-on for more info.
+                LOW_NOTIFIED=false
+                CRITICAL_NOTIFIED=false
+
                 if $DIMMED; then
                         DIMMED=false
                         if [ ! -z $PRE_DIM_VALUE ]; then
