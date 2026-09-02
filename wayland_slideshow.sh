@@ -129,6 +129,21 @@ fi
 echo "No instance of wallpaper script running, continuing with PID: $$."
 echo "$$" >"$PIDFILE"
 
+# Ensure awww-daemon is running
+AWWW_SOCK="/run/user/${UID}/wayland-${WAYLAND_DISPLAY#wayland-}-awww-daemon.sock"
+if ! pgrep -x awww-daemon > /dev/null 2>&1; then
+    echo "awww-daemon not running, starting it..."
+    rm -f "$AWWW_SOCK"
+    awww-daemon &
+    sleep 1
+elif [[ -S "$AWWW_SOCK" ]] && ! awww query > /dev/null 2>&1; then
+    echo "awww-daemon unresponsive, restarting..."
+    pkill awww-daemon 2>/dev/null; sleep 0.5
+    rm -f "$AWWW_SOCK"
+    awww-daemon &
+    sleep 1
+fi
+
 # Get display list once
 count=0
 until [ ${#DISPLAY_LIST[@]} -ge 1 ]; do
