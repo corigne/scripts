@@ -50,7 +50,7 @@ process_wallpaper() {
     fi
     local img="$1"
     local display="$2"
-    printf "Calling swww img:\n"
+    printf "Calling awww img:\n"
     printf "\tImage: $img\n"
     printf "\tDisplay: $display...\n"
 
@@ -63,16 +63,18 @@ process_wallpaper() {
 
     # Check if file is a GIF
     if [[ $(file --mime-type -b "$img") == "image/gif" ]]; then
-        swww img --filter="$FILTER_TYPE" \
+        awww img --filter="$FILTER_TYPE" \
             --transition-type="$transition_type" \
+            --transition-fps="$AWWW_TRANSITION_FPS" \
             --resize="$RESIZE_TYPE" \
             --fill-color="$FILL_COLOR" \
             --outputs "$display" $img
     else
         # Use gowall for other image formats
         gowall convert "$img" $THEME - --format png |
-            swww img --filter="$FILTER_TYPE" \
+            awww img --filter="$FILTER_TYPE" \
                 --transition-type="$transition_type" \
+                --transition-fps="$AWWW_TRANSITION_FPS" \
                 --resize="$RESIZE_TYPE" \
                 --fill-color="$FILL_COLOR" \
                 --outputs "$display" -
@@ -94,8 +96,8 @@ export FILL_COLOR="223344"
 export TRANSITION="random"
 export FIRST_PAINT=true
 
-export SWWW_TRANSITION_FPS=144
-export SWWW_TRANSITION_STEP=90
+export AWWW_TRANSITION_FPS=144
+export AWWW_TRANSITION_STEP=90
 
 export PAUSED=false
 
@@ -116,7 +118,7 @@ fi
 echo "Using theme: $THEME"
 
 # Single instance check
-PIDFILE=/tmp/swww-randomize-pidfile.txt
+PIDFILE=/tmp/awww-randomize-pidfile.txt
 if [[ -e "$PIDFILE" ]]; then
     OLD_PID="$(<$PIDFILE)"
     if [[ -n "$OLD_PID" ]] && kill -0 "$OLD_PID" 2>/dev/null; then
@@ -131,7 +133,7 @@ echo "$$" >"$PIDFILE"
 count=0
 until [ ${#DISPLAY_LIST[@]} -ge 1 ]; do
     if [ $count -ge 500 ]; then
-        echo "Unable to find a display via swww query."
+        echo "Unable to find a display via awww query."
         exit 1
     fi
     sleep 0.01s
@@ -139,7 +141,7 @@ until [ ${#DISPLAY_LIST[@]} -ge 1 ]; do
     if hyprctl version; then
         DISPLAY_LIST=($(hyprctl monitors | rg "Monitor" | awk -F ' ' '{print $2}'))
     else
-        DISPLAY_LIST=($(swww query | awk -F': ' '/^: / {print $2}'))
+        DISPLAY_LIST=($(awww query | awk -F': ' '/^: / {print $2}'))
     fi
     count=$count+1
 done
@@ -165,7 +167,7 @@ while true; do
     fi
 
     # Save current list for reference
-    printf '%s\n' "${images[@]}" >/tmp/swww-randomize-list.txt
+    printf '%s\n' "${images[@]}" >/tmp/awww-randomize-list.txt
 
     # Calculate how many complete cycles we can do
     if [[ ${#images[@]} -ge $NUM_DISPLAYS ]]; then
