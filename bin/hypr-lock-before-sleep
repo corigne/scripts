@@ -1,0 +1,12 @@
+#!/bin/sh
+
+hyprlock \
+    --config "$HOME/.config/hypr/hyprlock-suspend.conf" \
+    --immediate-render &
+
+attempt=0
+while ! pidof hyprlock >/dev/null; do
+    attempt=$((attempt + 1))
+    [ "$attempt" -ge 50 ] && exit 1
+    sleep 0.1
+done

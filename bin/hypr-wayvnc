@@ -8,12 +8,17 @@ REAL_MONITOR="DP-1"
 
 # === CLEANUP FUNCTION ===
 cleanup() {
-  printf "\n[wayvnc] Cleaning up...\n"
-  hyprctl dispatch moveworkspacetomonitor "$VIRTUAL_WORKSPACE" "$REAL_MONITOR"
-  hyprctl dispatch focusmonitor "$REAL_MONITOR"
-  pkill wayvnc
-  printf "[wayvnc] Cleanup done.\n"
-  exit 0
+    status=$?
+    trap - INT TERM EXIT
+    printf "\n[wayvnc] Cleaning up...\n"
+    hyprctl dispatch moveworkspacetomonitor "$VIRTUAL_WORKSPACE" "$REAL_MONITOR"
+    hyprctl dispatch focusmonitor "$REAL_MONITOR"
+    if [[ -n ${wayvnc_pid:-} ]] && kill -0 "$wayvnc_pid" 2>/dev/null; then
+        kill "$wayvnc_pid"
+        wait "$wayvnc_pid" 2>/dev/null
+    fi
+    printf "[wayvnc] Cleanup done.\n"
+    exit "$status"
 }
 
 # === Trap Exit for Cleanup ===
@@ -38,4 +43,10 @@ hyprctl dispatch focusmonitor "$REAL_MONITOR"
 
 # === Start WayVNC ===
 printf "[wayvnc] Starting WayVNC on %s...\n" "$VIRTUAL_MONITOR"
-wayvnc $([[ $DEBUG ]] && echo -Ldebug) -g -f 60 -r -o "$VIRTUAL_MONITOR"
+wayvnc_args=(-g -f 60 -r -o "$VIRTUAL_MONITOR")
+if [[ -n ${DEBUG:-} ]]; then
+    wayvnc_args=(-Ldebug "${wayvnc_args[@]}")
+fi
+wayvnc "${wayvnc_args[@]}" &
+wayvnc_pid=$!
+wait "$wayvnc_pid"

@@ -1,8 +1,9 @@
 #!/bin/bash
-# thunar-extract-to-folder: Extract archives each into a named subdirectory (Extract To ./*)
-# Usage: thunar-extract-to-folder <file1> [file2 ...]
+# thunar-extract-here: Extract archives to their own directory (Extract Here)
+# Usage: thunar-extract-here <file1> [file2 ...]
 
-TMPFILE=$(mktemp /tmp/extract-list.XXXXXX)
+: "${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}"
+TMPFILE=$(mktemp "$XDG_RUNTIME_DIR/thunar-extract-list.XXXXXX") || exit 1
 printf '%s\0' "$@" > "$TMPFILE"
 
 INNER=$(cat << 'INNERSCRIPT'
@@ -12,43 +13,34 @@ NAMES=()
 while IFS= read -r -d '' FILE; do
     BASENAME="$(basename "$FILE")"
     DIR="$(dirname "$FILE")"
-    # Strip all extensions to get folder name (e.g. archive.tar.gz → archive)
-    FOLDERNAME="${BASENAME%%.*}"
-    DESTDIR="$DIR/$FOLDERNAME"
-
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  Extracting: $BASENAME"
-    echo "  Into:       $DESTDIR"
+    echo "  Into:       $DIR"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo
-
-    mkdir -p "$DESTDIR"
-    /usr/bin/7z x "$FILE" -o"$DESTDIR"
+    /usr/bin/7z x "$FILE" -o"$DIR"
     EXIT=$?
     echo
     if [ $EXIT -eq 0 ]; then
-        echo "✓ Done: $BASENAME → ./$FOLDERNAME/"
-        NAMES+=("$FOLDERNAME")
+        echo "✓ Done: $BASENAME"
+        NAMES+=("$BASENAME")
     else
         echo "✗ FAILED: $BASENAME (exit code $EXIT)"
         FAILED=1
     fi
     echo
-done < "REPLACE_TMPFILE"
+done < "$1"
 
-rm -f "REPLACE_TMPFILE"
+rm -f "$1"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 if [ $FAILED -eq 0 ]; then
     COUNT="${#NAMES[@]}"
     echo "  All $COUNT extraction(s) complete."
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    ACTIVE_TITLE=$(/usr/bin/hyprctl activewindow -j 2>/dev/null | /usr/bin/jq -r '.title // empty')
-    if [[ "$ACTIVE_TITLE" != "Extract To ./*" ]]; then
-        /usr/bin/notify-send -i utilities-file-archiver \
-            "Extraction Complete" \
-            "$COUNT archive(s) extracted to subfolders"
-    fi
+    /usr/bin/notify-send -i utilities-file-archiver \
+        "Extraction Complete" \
+        "$COUNT archive(s) extracted successfully"
 else
     echo "  Some extractions FAILED — see output above."
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -62,7 +54,5 @@ fi
 INNERSCRIPT
 )
 
-# Embed the actual tmpfile path into the inner script
-INNER="${INNER//REPLACE_TMPFILE/$TMPFILE}"
-
-/usr/bin/ghostty --title="Extract To ./*" --class="io.nexus.thunarextract" -e bash -c "$INNER" &
+/usr/bin/ghostty --title="Extract Here" --class="io.nexus.thunarextract" \
+    -e /usr/bin/bash -c "$INNER" thunar-extract-here "$TMPFILE" &

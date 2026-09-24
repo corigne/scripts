@@ -1,0 +1,31 @@
+#!/bin/bash
+PICDIR=$HOME/Pictures/sfw
+
+# Store first argument as theme, shift to get remaining args
+THEME="${1:-}"
+if [[ $# -gt 0 ]]; then
+    shift
+fi
+
+# Validate theme
+if [[ -z "$THEME" ]] || ! gowall list | grep -Fxq "$THEME"; then
+    THEME_ARGS=()
+else
+    THEME_ARGS=(-t "$THEME")
+fi
+
+# Exit if hyprlock is already running
+pidof hyprlock && exit 0
+
+# Lock immediately using the prepared wallpapers.
+hyprlock "$@"
+
+# Prepare wallpapers for the next lock after the current lock exits.
+PIC=$(find "$PICDIR" -maxdepth 1 -type f -printf '%f\n' | shuf -n1)
+PIC2=$(find "$PICDIR" -maxdepth 1 -type f -printf '%f\n' | shuf -n1)
+PIC3=$(find "$PICDIR" -maxdepth 1 -type f -printf '%f\n' | shuf -n1)
+
+gowall convert "$PICDIR/$PIC" "${THEME_ARGS[@]}" --output "$HOME/Pictures/.lock_wallpaper" --format png &
+gowall convert "$PICDIR/$PIC2" "${THEME_ARGS[@]}" --output "$HOME/Pictures/.lock_wallpaper2" --format png &
+gowall convert "$PICDIR/$PIC3" "${THEME_ARGS[@]}" --output "$HOME/Pictures/.lock_wallpaper3" --format png &
+wait

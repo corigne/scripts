@@ -5,46 +5,70 @@
 graceful_shutdown() {
     printf "\nReceived SIGTERM, attempting graceful shutdown."
 
-    # Kill any running background jobs
-    jobs -p | xargs -r kill -TERM 2>/dev/null
+    if [[ -n ${SLEEP_PID:-} ]] && kill -0 "$SLEEP_PID" 2>/dev/null; then
+        kill "$SLEEP_PID"
+    fi
 
-    rm -f "$PIDFILE"
     trap - SIGTERM
     exit 0
 }
 
+cleanup() {
+    if [[ -f $PIDFILE ]] && [[ $(<"$PIDFILE") == "$$" ]]; then
+        rm -f "$PIDFILE" "$STATEFILE"
+    fi
+}
+
 interrupt_sleep() {
-    $DEBUG && echo "Sleep interrupted, unpausing."
+    ${DEBUG:-false} && echo "Sleep interrupted, unpausing."
     export PAUSED=false
-    pkill -P $$ sleep 2>/dev/null
+    if [[ -n ${SLEEP_PID:-} ]] && kill -0 "$SLEEP_PID" 2>/dev/null; then
+        kill "$SLEEP_PID"
+    fi
 }
 
 pause_slideshow() {
-    $DEBUG && echo "Pausing slideshow."
+    ${DEBUG:-false} && echo "Pausing slideshow."
     export PAUSED=true
     interruptible_sleep 7d
+}
+
+restart_slideshow() {
+    ${DEBUG:-false} && echo "Restarting slideshow."
+    if [[ -n ${SLEEP_PID:-} ]] && kill -0 "$SLEEP_PID" 2>/dev/null; then
+        kill "$SLEEP_PID"
+    fi
+    cleanup
+    trap - SIGHUP EXIT
+    exec "$0" "${SLIDESHOW_ARGS[@]}"
 }
 
 # Replace your sleep with an interruptible version
 interruptible_sleep() {
     local duration=$1
     sleep "$duration" &
-    local sleep_pid=$!
-    wait $sleep_pid 2>/dev/null
-    return $?
+    SLEEP_PID=$!
+    wait "$SLEEP_PID" 2>/dev/null
+    local status=$?
+    SLEEP_PID=
+    return "$status"
 }
 
 # Function to get shuffled image list
 get_shuffled_images() {
-    find "$1" -type f -exec file --mime-type {} + |
-        grep -E "image/.*" |
-        cut -d: -f1 |
-        shuf
+    find "$1" -type f \( \
+        -iname '*.avif' -o \
+        -iname '*.gif' -o \
+        -iname '*.jpeg' -o \
+        -iname '*.jpg' -o \
+        -iname '*.png' -o \
+        -iname '*.webp' \
+    \) -print | shuf
 }
 
 # Function to process a single wallpaper for a display
 process_wallpaper() {
-    if [[ $PAUSED == 1 ]]; then
+    if "$PAUSED"; then
         printf "Skipping wallpaper paint while slideshow paused."
         return 0
     fi
@@ -54,8 +78,8 @@ process_wallpaper() {
     printf "\tImage: $img\n"
     printf "\tDisplay: $display...\n"
 
-    $VERBOSE && echo FIRST_PAINT=$FIRST_PAINT
-    if $FIRST_PAINT; then
+    ${VERBOSE:-false} && echo "FIRST_PAINT=$FIRST_PAINT"
+    if "$FIRST_PAINT"; then
         transition_type="none"
     else
         transition_type=$TRANSITION
@@ -68,20 +92,26 @@ process_wallpaper() {
             --transition-fps="$AWWW_TRANSITION_FPS" \
             --resize="$RESIZE_TYPE" \
             --fill-color="$FILL_COLOR" \
-            --outputs "$display" $img
+            --outputs "$display" "$img"
     else
-        # Use gowall for other image formats
-        gowall convert "$img" $THEME - --format png |
+        local cache_file="$WALLPAPER_CACHE_DIR/${display//[^[:alnum:]_.-]/_}.png"
+        if [[ -n $THEME ]]; then
+            local -a theme_args=(-t "$THEME")
+        else
+            local -a theme_args=()
+        fi
+        if gowall convert "$img" "${theme_args[@]}" --output "$cache_file" --format png; then
             awww img --filter="$FILTER_TYPE" \
                 --transition-type="$transition_type" \
                 --transition-fps="$AWWW_TRANSITION_FPS" \
                 --resize="$RESIZE_TYPE" \
                 --fill-color="$FILL_COLOR" \
-                --outputs "$display" -
+                --outputs "$display" "$cache_file"
+        fi
     fi
 }
 export -f process_wallpaper
-export THEME RESIZE_TYPE FILTER_TYPE TRANSITION FILL_COLOR
+export THEME RESIZE_TYPE FILTER_TYPE TRANSITION FILL_COLOR WALLPAPER_CACHE_DIR
 
 ##########################
 ### SCRIPT LOGIC START ###
@@ -100,10 +130,19 @@ export AWWW_TRANSITION_FPS=144
 export AWWW_TRANSITION_STEP=90
 
 export PAUSED=false
+export WALLPAPER_CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/wayland-slideshow"
+mkdir -p "$WALLPAPER_CACHE_DIR"
+: "${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}"
+PIDFILE="$XDG_RUNTIME_DIR/awww-slideshow.pid"
+STATEFILE="$XDG_RUNTIME_DIR/awww-slideshow-images"
+SLEEP_PID=
+SLIDESHOW_ARGS=("$@")
 
 trap graceful_shutdown SIGTERM
 trap interrupt_sleep SIGUSR1
 trap pause_slideshow SIGUSR2
+trap restart_slideshow SIGHUP
+trap cleanup EXIT
 
 if [[ $# -lt 1 ]] || [[ ! -d $1 ]]; then
     echo "Usage: $0 <dir containing images> [theme]"
@@ -111,14 +150,13 @@ if [[ $# -lt 1 ]] || [[ ! -d $1 ]]; then
 fi
 
 # Validate and set theme
-THEME=""
-if [[ -n "$2" ]] && gowall list | grep -q "^$2$"; then
-    THEME="-t $2"
+THEME=
+if [[ -n "$2" ]] && gowall list | grep -Fxq "$2"; then
+    THEME=$2
 fi
 echo "Using theme: $THEME"
 
 # Single instance check
-PIDFILE=/tmp/awww-randomize-pidfile.txt
 if [[ -e "$PIDFILE" ]]; then
     OLD_PID="$(<$PIDFILE)"
     if [[ -n "$OLD_PID" ]] && kill -0 "$OLD_PID" 2>/dev/null; then
@@ -129,22 +167,31 @@ fi
 echo "No instance of wallpaper script running, continuing with PID: $$."
 echo "$$" >"$PIDFILE"
 
-# Ensure awww-daemon is running
-AWWW_SOCK="/run/user/${UID}/wayland-${WAYLAND_DISPLAY#wayland-}-awww-daemon.sock"
-if ! pgrep -x awww-daemon > /dev/null 2>&1; then
+# Ensure awww-daemon is running.
+if ! awww query > /dev/null 2>&1; then
+    if pgrep -x awww-daemon > /dev/null 2>&1; then
+        echo "awww-daemon is running but not responding."
+        exit 1
+    fi
     echo "awww-daemon not running, starting it..."
-    rm -f "$AWWW_SOCK"
-    awww-daemon &
-    sleep 1
-elif [[ -S "$AWWW_SOCK" ]] && ! awww query > /dev/null 2>&1; then
-    echo "awww-daemon unresponsive, restarting..."
-    pkill awww-daemon 2>/dev/null; sleep 0.5
-    rm -f "$AWWW_SOCK"
-    awww-daemon &
-    sleep 1
+    awww-daemon --quiet &
+    disown
 fi
 
-# Get display list once
+for ((count = 0; count < 500; count++)); do
+    if awww query > /dev/null 2>&1; then
+        break
+    fi
+    sleep 0.01
+done
+if ! awww query > /dev/null 2>&1; then
+    echo "Unable to connect to awww-daemon."
+    exit 1
+fi
+
+awww restore > /dev/null 2>&1 || true
+
+# Get display list from awww, independent of the compositor.
 count=0
 until [ ${#DISPLAY_LIST[@]} -ge 1 ]; do
     if [ $count -ge 500 ]; then
@@ -153,16 +200,12 @@ until [ ${#DISPLAY_LIST[@]} -ge 1 ]; do
     fi
     sleep 0.01s
 
-    if hyprctl version; then
-        DISPLAY_LIST=($(hyprctl monitors | rg "Monitor" | awk -F ' ' '{print $2}'))
-    else
-        DISPLAY_LIST=($(awww query | awk -F': ' '/^: / {print $2}'))
-    fi
-    count=$count+1
+    mapfile -t DISPLAY_LIST < <(awww query | awk -F: 'NF > 1 {print $1}')
+    count=$((count + 1))
 done
 
 NUM_DISPLAYS=${#DISPLAY_LIST[@]}
-echo "Found displays: $DISPLAY_LIST"
+echo "Found displays: ${DISPLAY_LIST[*]}"
 
 echo "Starting wallpaper randomizer for ${NUM_DISPLAYS} display(s)"
 
@@ -182,7 +225,7 @@ while true; do
     fi
 
     # Save current list for reference
-    printf '%s\n' "${images[@]}" >/tmp/awww-randomize-list.txt
+    printf '%s\n' "${images[@]}" >"$STATEFILE"
 
     # Calculate how many complete cycles we can do
     if [[ ${#images[@]} -ge $NUM_DISPLAYS ]]; then
@@ -217,7 +260,7 @@ while true; do
             parallel --colsep ';' -j "$NUM_DISPLAYS" process_wallpaper {1} {2}
 
         interruptible_sleep "$INTERVAL"
-        if $FIRST_PAINT; then
+        if "$FIRST_PAINT"; then
             export -n FIRST_PAINT
             export FIRST_PAINT=false
         fi
@@ -236,7 +279,7 @@ while true; do
             pairs+=("$current_img;${DISPLAY_LIST[i]}")
             ((img_index++))
         done
-        echo ${pairs[@]}
+        echo "${pairs[*]}"
 
         echo "Setting wallpapers: ${current_images[*]}"
 

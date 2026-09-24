@@ -1,5 +1,5 @@
 #!/bin/bash
-# prepare_slideshows.sh
+# prepare-slideshows
 #
 # Incrementally syncs wallpaper and animated GIF slideshows from categorised
 # source directories.  Only copies new files and removes orphans — never
@@ -17,7 +17,7 @@
 #   --animated  ~/Pictures/animated_slideshow/
 #               ← animated/ subdirs excluding **/nsfw/**
 #
-# Usage: prepare_slideshows.sh [-v] [-j N] [-t THEME] [--home] [--sfw] [--animated]
+# Usage: prepare-slideshows [-v] [-j N] [-t THEME] [--home] [--sfw] [--animated]
 
 # ── Defaults ─────────────────────────────────────────────────────────────────
 
@@ -41,7 +41,7 @@ RUN_ANIMATED=false
 # ── Argument parsing ──────────────────────────────────────────────────────────
 
 print_usage() {
-  printf 'Usage: prepare_slideshows [options] [--home] [--sfw] [--animated]
+  printf 'Usage: prepare-slideshows [options] [--home] [--sfw] [--animated]
 
 Options:
   -j N      Parallel jobs for animated GIF processing (default: %d)

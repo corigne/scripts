@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+
+: "${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}"
+slideshow_pidfile="$XDG_RUNTIME_DIR/awww-slideshow.pid"
+
+signal_slideshow() {
+    local signal=$1
+    local pid
+
+    [[ -r $slideshow_pidfile ]] || return 0
+    read -r pid <"$slideshow_pidfile"
+    [[ $pid =~ ^[0-9]+$ ]] || return 1
+    kill -0 "$pid" 2>/dev/null || return 0
+    kill "-$signal" "$pid"
+}
+
+HYPRGAMEMODE=$(hyprctl getoption animations:enabled | awk 'NR==1{print $2}')
+if [ "$HYPRGAMEMODE" = "true" ]; then
+    hyprctl eval """
+    hl.config({
+        animations = { enabled = false },
+        decoration = {
+            shadow = { enabled = false },
+            blur = { enabled = false },
+            rounding = false
+        },
+        general = {
+            gaps_in = 0,
+            gaps_out = 0,
+            border_size = true
+        }
+    })
+    """
+    signal_slideshow SIGUSR2
+else
+    signal_slideshow SIGUSR1
+    hyprctl reload
+fi

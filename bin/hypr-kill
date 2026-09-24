@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+if pid=$(hyprprop | jq -er '.pid | select(type == "number")'); then
+    kill "$pid"
+else
+    echo "Unable to get a window PID. Ensure hyprprop is installed and Hyprland is active." >&2
+    exit 1
+fi

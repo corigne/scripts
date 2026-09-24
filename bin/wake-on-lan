@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# wol.sh — Wake-on-LAN with ARP/hostname discovery
+# wake-on-lan — Wake-on-LAN with ARP/hostname discovery
 # Version: 1.0.0
 #
 # Usage:
-#   wol.sh                    interactive menu
-#   wol.sh <hostname|MAC>     wake a specific host directly
+#   wake-on-lan                    interactive menu
+#   wake-on-lan <hostname|MAC>     wake a specific host directly
 #
 # Merges ARP table, /etc/hosts, and known-hosts list into a single menu.
 # Selects any reachable host by number, hostname, or MAC.

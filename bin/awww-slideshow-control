@@ -1,0 +1,66 @@
+#!/bin/sh
+
+usage() {
+    echo "Usage: awww-slideshow-control {pause|resume|restart|stop|signal SIGNAL}" >&2
+    exit 2
+}
+
+: "${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}"
+pidfile="$XDG_RUNTIME_DIR/awww-slideshow.pid"
+
+[ -r "$pidfile" ] || {
+    echo "awww-slideshow is not running: PID file not found" >&2
+    exit 1
+}
+
+read -r pid <"$pidfile"
+case "$pid" in
+    ''|*[!0-9]*)
+        echo "Invalid PID in $pidfile" >&2
+        exit 1
+        ;;
+esac
+
+if ! kill -0 "$pid" 2>/dev/null; then
+    echo "awww-slideshow is not running: stale PID $pid" >&2
+    exit 1
+fi
+
+if [ -r "/proc/$pid/cmdline" ] &&
+    ! tr '\000' '\n' <"/proc/$pid/cmdline" |
+        grep -Eq '(^|/)awww-slideshow$'; then
+    echo "Refusing to signal PID $pid: process is not awww-slideshow" >&2
+    exit 1
+fi
+
+case "${1:-}" in
+    pause)
+        signal=USR2
+        ;;
+    resume)
+        signal=USR1
+        ;;
+    restart)
+        signal=HUP
+        ;;
+    stop)
+        signal=TERM
+        ;;
+    signal)
+        case "${2:-}" in
+            HUP|TERM|USR1|USR2)
+                signal=$2
+                ;;
+            *)
+                usage
+                ;;
+        esac
+        [ "$#" -eq 2 ] || usage
+        ;;
+    *)
+        usage
+        ;;
+esac
+
+[ "$#" -eq 1 ] || [ "$1" = signal ] || usage
+kill -s "$signal" "$pid"

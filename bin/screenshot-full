@@ -1,0 +1,9 @@
+#!/bin/sh
+
+: "${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}"
+screenshot=$(mktemp "$XDG_RUNTIME_DIR/screenshot-full.XXXXXX.png") || exit 1
+trap 'rm -f "$screenshot"' EXIT HUP INT TERM
+
+grim "$screenshot" || exit 1
+wl-copy --type image/png <"$screenshot" || exit 1
+notify-send -t 1500 "Screen captured."

@@ -1,0 +1,22 @@
+#!/bin/sh
+
+hyprctl dispatch 'hl.dsp.dpms("off")' || exit 1
+
+# A Hyprlock client that crosses S3 can retain stale Wayland input state.
+# Leave the session locked, but replace the client with a fresh one after wake.
+lock_pids=$(pgrep -x hyprlock)
+for lock_pid in $lock_pids; do
+    kill "$lock_pid"
+done
+
+attempt=0
+while pgrep -x hyprlock >/dev/null; do
+    attempt=$((attempt + 1))
+    if [ "$attempt" -ge 10 ]; then
+        for lock_pid in $lock_pids; do
+            kill -9 "$lock_pid"
+        done
+        break
+    fi
+    sleep 0.1
+done

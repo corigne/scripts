@@ -1,0 +1,15 @@
+#!/bin/sh
+
+hyprlock \
+    --config "$HOME/.config/hypr/hyprlock-suspend.conf" \
+    --immediate-render &
+lock_pid=$!
+
+# Keep the panel dark until the fresh lock has acquired and rendered surfaces.
+sleep 1
+if ! kill -0 "$lock_pid" 2>/dev/null; then
+    hyprctl dispatch 'hl.dsp.dpms("on")'
+    exit 1
+fi
+
+hyprctl dispatch 'hl.dsp.dpms("on")'

@@ -1,0 +1,28 @@
+#!/bin/sh
+
+: "${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}"
+screenshot=$(mktemp "$XDG_RUNTIME_DIR/screenshot-region.XXXXXX.png") || exit 1
+freeze_pid=
+
+cleanup() {
+    if [ -n "$freeze_pid" ] && kill -0 "$freeze_pid" 2>/dev/null; then
+        kill "$freeze_pid"
+        wait "$freeze_pid" 2>/dev/null
+    fi
+    rm -f "$screenshot"
+}
+trap cleanup EXIT HUP INT TERM
+
+wayfreeze &
+freeze_pid=$!
+sleep 0.1
+
+geometry=$(slurp) || exit 1
+grim -g "$geometry" "$screenshot" || exit 1
+
+kill "$freeze_pid"
+wait "$freeze_pid" 2>/dev/null
+freeze_pid=
+
+wl-copy --type image/png <"$screenshot" || exit 1
+notify-send -t 1500 "Screen captured."
