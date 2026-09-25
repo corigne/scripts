@@ -1,7 +1,7 @@
 #!/bin/sh
 
 usage() {
-    echo "Usage: awww-slideshow-control {pause|resume|restart|stop|signal SIGNAL}" >&2
+    echo "Usage: awww-slideshow-control {next|pause|resume|restart|stop|signal SIGNAL}" >&2
     exit 2
 }
 
@@ -34,6 +34,9 @@ if [ -r "/proc/$pid/cmdline" ] &&
 fi
 
 case "${1:-}" in
+    next)
+        signal=USR1
+        ;;
     pause)
         signal=USR2
         ;;
