@@ -200,7 +200,7 @@ until [ ${#DISPLAY_LIST[@]} -ge 1 ]; do
     fi
     sleep 0.01s
 
-    mapfile -t DISPLAY_LIST < <(awww query | awk -F: 'NF > 1 {print $1}')
+    mapfile -t DISPLAY_LIST < <(awww query --json | jq -r '.[][].name')
     count=$((count + 1))
 done
 
