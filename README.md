@@ -33,7 +33,9 @@ Compositor-neutral commands:
 | `thunar-extract-to-folder` | Extract each archive to a named folder | `7z`, `ghostty`, `libnotify` |
 | `awww-slideshow` | Legacy multi-output `awww` slideshow | `awww`, `gowall`, GNU `parallel`, `jq`, `file`, `find`, `shuf` |
 | `awww-slideshow-control` | Signal the running slideshow by its runtime PID | POSIX `sh`, `grep`, `tr` |
-| `noctalia-wallpaper-random` | Pick a random Noctalia wallpaper from a directory | POSIX `sh`, `find`, `shuf`, Noctalia |
+| `wallpaper-collection-select` | Persist and select from the active wallpaper collection | POSIX `sh`, `find`, `jq`, `shuf` |
+| `wallpaper-next` | Advance through Noctalia on Niri or the existing `awww` slideshow on Hyprland | POSIX `sh` |
+| `noctalia-wallpaper-random` | Select or advance a collection through one Noctalia plugin transaction | POSIX `sh`, `jq`, Niri, Noctalia |
 | `gimp-open-folder` | Open one folder's images in GIMP | `gimp`, `find`, `xargs` |
 | `krita` | Launch Krita with the retained Wayland scaling environment | `krita` |
 | `prepare-slideshows` | Build static and animated wallpaper collections | `rsync`; animated mode also needs `parallel`, `gowall`, `gifsicle`, ImageMagick, `bc`, `file` |
@@ -42,6 +44,10 @@ Compositor-neutral commands:
 
 `awww-slideshow` discovers outputs through `awww query`; it does not query a
 compositor. Niri wallpaper is expected to be managed by Noctalia instead.
+Collection state is stored under
+`$XDG_STATE_HOME/wallpaper-collection/state.json`. `wallpaper-next` never
+invokes Noctalia in a Hyprland session; it delegates to
+`awww-slideshow-control next`.
 
 Control the running instance without process-name matching:
 

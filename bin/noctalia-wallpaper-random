@@ -1,64 +1,45 @@
 #!/bin/sh
 set -eu
 
-if [ "$#" -ne 1 ] || [ ! -d "$1" ]; then
-    printf 'Usage: noctalia-wallpaper-random DIRECTORY\n' >&2
-    exit 2
-fi
-
-directory=$(CDPATH= cd -- "$1" && pwd -P)
-case "$directory" in
-    *"'"*)
-        printf "Wallpaper directory cannot contain a single quote: %s\n" "$directory" >&2
-        exit 2
+case "${1:-}" in
+    --next)
+        [ "$#" -eq 1 ] || {
+            printf 'Usage: noctalia-wallpaper-random {DIRECTORY|--next}\n' >&2
+            exit 2
+        }
+        action=next
+        ;;
+    *)
+        [ "$#" -eq 1 ] && [ -d "$1" ] || {
+            printf 'Usage: noctalia-wallpaper-random {DIRECTORY|--next}\n' >&2
+            exit 2
+        }
+        action=random
+        directory=$1
         ;;
 esac
 
-if ! find "$directory" -maxdepth 1 -type f \
-    \( -iname '*.gif' -o -iname '*.jpeg' -o -iname '*.jpg' \
-    -o -iname '*.png' -o -iname '*.webp' \) -print -quit |
-    grep -q .; then
-    printf 'No supported wallpapers found in %s\n' "$1" >&2
-    exit 1
-fi
-
 runtime_dir=${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}
-wallpaper_list=$runtime_dir/noctalia-wallpapers.$$
 output_list=$runtime_dir/noctalia-outputs.$$
 
 if ! niri_cli=$(command -v niri); then
     printf 'niri CLI not found in PATH\n' >&2
     exit 1
 fi
+if ! collection_select=$(command -v wallpaper-collection-select); then
+    printf 'wallpaper-collection-select not found in PATH\n' >&2
+    exit 1
+fi
+if ! command -v noctalia >/dev/null 2>&1; then
+    printf 'noctalia CLI not found in PATH\n' >&2
+    exit 1
+fi
 
 cleanup() {
-    rm -f "$wallpaper_list" "$output_list"
+    rm -f "$output_list"
 }
 trap cleanup EXIT HUP INT TERM
 
-gif_count=$(
-    find "$directory" -maxdepth 1 -type f -iname '*.gif' -print |
-        wc -l
-)
-candidate_count=$(
-    find "$directory" -maxdepth 1 -type f \
-        \( -iname '*.gif' -o -iname '*.jpeg' -o -iname '*.jpg' \
-        -o -iname '*.png' -o -iname '*.webp' \) -print |
-        wc -l
-)
-
-if [ "$gif_count" -eq "$candidate_count" ]; then
-    animated=true
-    pattern='*.gif'
-else
-    animated=false
-    pattern='*'
-fi
-
-find "$directory" -maxdepth 1 -type f -iname "$pattern" \
-    \( -iname '*.gif' -o -iname '*.jpeg' -o -iname '*.jpg' \
-    -o -iname '*.png' -o -iname '*.webp' \) -print |
-    shuf >"$wallpaper_list"
 if ! outputs=$("$niri_cli" msg -j outputs); then
     printf 'Failed to enumerate niri outputs\n' >&2
     exit 1
@@ -72,24 +53,9 @@ if [ ! -s "$output_list" ]; then
     exit 1
 fi
 
-assignments='{}'
-wallpaper_index=1
-while IFS= read -r output; do
-    wallpaper=$(sed -n "${wallpaper_index}p" "$wallpaper_list")
-    if [ -z "$wallpaper" ]; then
-        wallpaper_index=1
-        wallpaper=$(sed -n '1p' "$wallpaper_list")
-    fi
-    assignments=$(
-        jq -cn --argjson assignments "$assignments" \
-            --arg connector "$output" --arg path "$wallpaper" \
-            '$assignments + {($connector): $path}'
-    )
-    wallpaper_index=$((wallpaper_index + 1))
-done <"$output_list"
-
-payload=$(
-    jq -cn --argjson animated "$animated" --argjson assignments "$assignments" \
-        '{animated:$animated,assignments:$assignments}'
-)
+if [ "$action" = next ]; then
+    payload=$("$collection_select" next <"$output_list")
+else
+    payload=$("$collection_select" random "$directory" <"$output_list")
+fi
 noctalia msg plugin nexus/mpvpaper:service all apply "$payload"

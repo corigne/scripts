@@ -1,0 +1,138 @@
+#!/bin/sh
+set -eu
+
+usage() {
+    printf 'Usage: wallpaper-collection-select {random DIRECTORY|next}\n' >&2
+    exit 2
+}
+
+[ "$#" -ge 1 ] || usage
+action=$1
+shift
+
+state_home=${XDG_STATE_HOME:-${HOME:?HOME is required}/.local/state}
+state_dir=$state_home/wallpaper-collection
+state_file=$state_dir/state.json
+runtime_dir=${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}
+candidate_list=$runtime_dir/wallpaper-collection-candidates.$$
+output_list=$runtime_dir/wallpaper-collection-outputs.$$
+state_tmp=$state_dir/state.json.$$
+
+cleanup() {
+    rm -f "$candidate_list" "$output_list" "$state_tmp"
+}
+trap cleanup EXIT HUP INT TERM
+
+cat >"$output_list"
+if [ ! -s "$output_list" ]; then
+    printf 'No wallpaper outputs provided\n' >&2
+    exit 1
+fi
+
+case "$action" in
+    random)
+        [ "$#" -eq 1 ] && [ -d "$1" ] || usage
+        directory=$(CDPATH= cd -- "$1" && pwd -P)
+        ;;
+    next)
+        [ "$#" -eq 0 ] || usage
+        if [ ! -r "$state_file" ] ||
+            ! jq -e '
+                .version == 1
+                and (.directory | type == "string" and length > 0)
+                and (.animated | type == "boolean")
+                and .order == "alphabetical"
+                and (.assignments | type == "object")
+            ' "$state_file" >/dev/null; then
+            printf 'No valid active wallpaper collection state\n' >&2
+            exit 1
+        fi
+        directory=$(jq -r '.directory' "$state_file")
+        [ -d "$directory" ] || {
+            printf 'Active wallpaper collection no longer exists: %s\n' "$directory" >&2
+            exit 1
+        }
+        ;;
+    *)
+        usage
+        ;;
+esac
+
+find_supported() {
+    find "$directory" -maxdepth 1 -type f \
+        \( -iname '*.gif' -o -iname '*.jpeg' -o -iname '*.jpg' \
+        -o -iname '*.png' -o -iname '*.webp' \) -print
+}
+
+if [ "$action" = random ]; then
+    gif_count=$(find "$directory" -maxdepth 1 -type f -iname '*.gif' -print | wc -l)
+    candidate_count=$(find_supported | wc -l)
+    if [ "$candidate_count" -eq 0 ]; then
+        printf 'No supported wallpapers found in %s\n' "$directory" >&2
+        exit 1
+    fi
+    if [ "$gif_count" -eq "$candidate_count" ]; then
+        animated=true
+        find "$directory" -maxdepth 1 -type f -iname '*.gif' -print |
+            shuf >"$candidate_list"
+    else
+        animated=false
+        find_supported | shuf >"$candidate_list"
+    fi
+    previous_assignments='{}'
+else
+    animated=$(jq -r '.animated' "$state_file")
+    if [ "$animated" = true ]; then
+        find "$directory" -maxdepth 1 -type f -iname '*.gif' -print |
+            LC_ALL=C sort >"$candidate_list"
+    else
+        find_supported | LC_ALL=C sort >"$candidate_list"
+    fi
+    previous_assignments=$(jq -c '.assignments' "$state_file")
+fi
+
+if [ ! -s "$candidate_list" ]; then
+    printf 'No supported wallpapers found in %s\n' "$directory" >&2
+    exit 1
+fi
+
+assignments='{}'
+fallback_index=1
+while IFS= read -r output; do
+    wallpaper=
+    if [ "$action" = next ]; then
+        current=$(printf '%s\n' "$previous_assignments" |
+            jq -r --arg connector "$output" '.[$connector] // empty')
+        if [ -n "$current" ]; then
+            current_index=$(grep -n -F -x -- "$current" "$candidate_list" |
+                sed -n '1s/:.*//p')
+            if [ -n "$current_index" ]; then
+                wallpaper=$(sed -n "$((current_index + 1))p" "$candidate_list")
+            fi
+        fi
+    fi
+    if [ -z "$wallpaper" ]; then
+        wallpaper=$(sed -n "${fallback_index}p" "$candidate_list")
+        if [ -z "$wallpaper" ]; then
+            fallback_index=1
+            wallpaper=$(sed -n '1p' "$candidate_list")
+        fi
+    fi
+    assignments=$(
+        jq -cn --argjson assignments "$assignments" \
+            --arg connector "$output" --arg path "$wallpaper" \
+            '$assignments + {($connector): $path}'
+    )
+    fallback_index=$((fallback_index + 1))
+done <"$output_list"
+
+mkdir -p "$state_dir"
+umask 077
+jq -cn --arg directory "$directory" --argjson animated "$animated" \
+    --argjson assignments "$assignments" \
+    '{version:1,directory:$directory,order:"alphabetical",
+      animated:$animated,assignments:$assignments}' >"$state_tmp"
+mv -f "$state_tmp" "$state_file"
+
+jq -cn --argjson animated "$animated" --argjson assignments "$assignments" \
+    '{animated:$animated,assignments:$assignments}'

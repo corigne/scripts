@@ -1,0 +1,19 @@
+#!/bin/sh
+set -eu
+
+case ${XDG_CURRENT_DESKTOP:-} in
+    *Hyprland*|*hyprland*)
+        exec awww-slideshow-control next
+        ;;
+esac
+
+if [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
+    exec awww-slideshow-control next
+fi
+
+if [ -n "${NIRI_SOCKET:-}" ]; then
+    exec noctalia-wallpaper-random --next
+fi
+
+printf 'No supported compositor session detected\n' >&2
+exit 1
