@@ -49,6 +49,11 @@ Collection state is stored under
 invokes Noctalia in a Hyprland session; it delegates to
 `awww-slideshow-control next`.
 
+The Noctalia profile disables its native fixed-directory automation. The Niri
+profile's `wallpaper-collection.timer` calls the portable `wallpaper-next`
+dispatcher every five minutes, so automatic changes use the same active
+collection state. Scripts do not rewrite desktop configuration.
+
 Control the running instance without process-name matching:
 
 ```sh

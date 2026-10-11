@@ -21,6 +21,7 @@ esac
 
 runtime_dir=${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}
 output_list=$runtime_dir/noctalia-outputs.$$
+lock_dir=$runtime_dir/noctalia-wallpaper-random.lock
 
 if ! niri_cli=$(command -v niri); then
     printf 'niri CLI not found in PATH\n' >&2
@@ -35,8 +36,14 @@ if ! command -v noctalia >/dev/null 2>&1; then
     exit 1
 fi
 
+if ! mkdir "$lock_dir" 2>/dev/null; then
+    printf 'Another wallpaper collection update is already running\n' >&2
+    exit 1
+fi
+
 cleanup() {
     rm -f "$output_list"
+    rmdir "$lock_dir" 2>/dev/null || true
 }
 trap cleanup EXIT HUP INT TERM
 
