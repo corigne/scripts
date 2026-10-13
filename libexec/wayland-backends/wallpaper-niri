@@ -1,40 +1,44 @@
 #!/bin/sh
 set -eu
 
-case "${1:-}" in
-    --next)
-        [ "$#" -eq 1 ] || {
-            printf 'Usage: noctalia-wallpaper-random {DIRECTORY|--next}\n' >&2
-            exit 2
-        }
-        action=next
+usage() {
+    printf 'Usage: wallpaper-niri {random DIRECTORY|next}\n' >&2
+    exit 2
+}
+
+[ "$#" -ge 1 ] || usage
+action=$1
+shift
+
+case "$action" in
+    random)
+        [ "$#" -eq 1 ] && [ -d "$1" ] || usage
+        directory=$1
+        ;;
+    next)
+        [ "$#" -eq 0 ] || usage
         ;;
     *)
-        [ "$#" -eq 1 ] && [ -d "$1" ] || {
-            printf 'Usage: noctalia-wallpaper-random {DIRECTORY|--next}\n' >&2
-            exit 2
-        }
-        action=random
-        directory=$1
+        usage
         ;;
 esac
 
 runtime_dir=${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}
-output_list=$runtime_dir/noctalia-outputs.$$
-lock_dir=$runtime_dir/noctalia-wallpaper-random.lock
+output_list=$runtime_dir/wallpaper-niri-outputs.$$
+lock_dir=$runtime_dir/wallpaper-collection.lock
 
-if ! niri_cli=$(command -v niri); then
+command -v niri >/dev/null 2>&1 || {
     printf 'niri CLI not found in PATH\n' >&2
     exit 1
-fi
-if ! collection_select=$(command -v wallpaper-collection-select); then
+}
+command -v wallpaper-collection-select >/dev/null 2>&1 || {
     printf 'wallpaper-collection-select not found in PATH\n' >&2
     exit 1
-fi
-if ! command -v noctalia >/dev/null 2>&1; then
+}
+command -v noctalia >/dev/null 2>&1 || {
     printf 'noctalia CLI not found in PATH\n' >&2
     exit 1
-fi
+}
 
 if ! mkdir "$lock_dir" 2>/dev/null; then
     printf 'Another wallpaper collection update is already running\n' >&2
@@ -47,7 +51,7 @@ cleanup() {
 }
 trap cleanup EXIT HUP INT TERM
 
-if ! outputs=$("$niri_cli" msg -j outputs); then
+if ! outputs=$(niri msg -j outputs); then
     printf 'Failed to enumerate niri outputs\n' >&2
     exit 1
 fi
@@ -61,8 +65,8 @@ if [ ! -s "$output_list" ]; then
 fi
 
 if [ "$action" = next ]; then
-    payload=$("$collection_select" next <"$output_list")
+    payload=$(wallpaper-collection-select next <"$output_list")
 else
-    payload=$("$collection_select" random "$directory" <"$output_list")
+    payload=$(wallpaper-collection-select random "$directory" <"$output_list")
 fi
 noctalia msg plugin nexus/mpvpaper:service all apply "$payload"

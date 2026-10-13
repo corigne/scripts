@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+
+[ "$#" -eq 2 ] || {
+    printf 'Usage: screenshot-plasma {full|region} OUTPUT\n' >&2
+    exit 2
+}
+
+mode=$1
+output=$2
+
+case "$mode" in
+    full)
+        exec spectacle --background --nonotify --fullscreen --output "$output"
+        ;;
+    region)
+        exec spectacle --background --nonotify --region --output "$output"
+        ;;
+    *)
+        printf 'Unsupported screenshot mode: %s\n' "$mode" >&2
+        exit 2
+        ;;
+esac

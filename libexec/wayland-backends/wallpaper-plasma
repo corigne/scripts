@@ -1,0 +1,52 @@
+#!/bin/sh
+set -eu
+
+usage() {
+    printf 'Usage: wallpaper-plasma {random DIRECTORY|next}\n' >&2
+    exit 2
+}
+
+[ "$#" -ge 1 ] || usage
+action=$1
+shift
+
+case "$action" in
+    random)
+        [ "$#" -eq 1 ] && [ -d "$1" ] || usage
+        directory=$1
+        ;;
+    next)
+        [ "$#" -eq 0 ] || usage
+        ;;
+    *)
+        usage
+        ;;
+esac
+
+runtime_dir=${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}
+lock_dir=$runtime_dir/wallpaper-collection.lock
+
+command -v wallpaper-collection-select >/dev/null 2>&1 || {
+    printf 'wallpaper-collection-select not found in PATH\n' >&2
+    exit 1
+}
+command -v plasma-apply-wallpaperimage >/dev/null 2>&1 || {
+    printf 'plasma-apply-wallpaperimage not found in PATH\n' >&2
+    exit 1
+}
+
+if ! mkdir "$lock_dir" 2>/dev/null; then
+    printf 'Another wallpaper collection update is already running\n' >&2
+    exit 1
+fi
+trap 'rmdir "$lock_dir" 2>/dev/null || true' EXIT HUP INT TERM
+
+if [ "$action" = next ]; then
+    payload=$(printf '%s\n' plasma | wallpaper-collection-select next)
+else
+    payload=$(printf '%s\n' plasma |
+        wallpaper-collection-select random "$directory")
+fi
+
+wallpaper=$(printf '%s\n' "$payload" | jq -er '.assignments.plasma')
+plasma-apply-wallpaperimage --fill-mode preserveAspectCrop "$wallpaper"

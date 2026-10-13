@@ -1,9 +1,19 @@
 #!/bin/sh
+set -eu
 
 : "${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}"
 screenshot=$(mktemp "$XDG_RUNTIME_DIR/screenshot-full.XXXXXX.png") || exit 1
 trap 'rm -f "$screenshot"' EXIT HUP INT TERM
 
-grim "$screenshot" || exit 1
-wl-copy --type image/png <"$screenshot" || exit 1
+backend=$(wayland-backend)
+backend_dir=${DOTFILES_WAYLAND_BACKEND_DIR:-"$HOME/.local/libexec/dotfiles/wayland-backends"}
+backend_command=$backend_dir/screenshot-$backend
+
+[ -x "$backend_command" ] || {
+    printf 'Screenshot backend is not installed: %s\n' "$backend_command" >&2
+    exit 1
+}
+
+"$backend_command" full "$screenshot"
+wl-copy --type image/png <"$screenshot"
 notify-send -t 1500 "Screen captured."

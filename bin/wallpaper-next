@@ -1,19 +1,13 @@
 #!/bin/sh
 set -eu
 
-case ${XDG_CURRENT_DESKTOP:-} in
-    *Hyprland*|*hyprland*)
-        exec awww-slideshow-control next
-        ;;
-esac
+backend=$(wayland-backend)
+backend_dir=${DOTFILES_WAYLAND_BACKEND_DIR:-"$HOME/.local/libexec/dotfiles/wayland-backends"}
+backend_command=$backend_dir/wallpaper-$backend
 
-if [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
-    exec awww-slideshow-control next
-fi
+[ -x "$backend_command" ] || {
+    printf 'Wallpaper backend is not installed: %s\n' "$backend_command" >&2
+    exit 1
+}
 
-if [ -n "${NIRI_SOCKET:-}" ]; then
-    exec noctalia-wallpaper-random --next
-fi
-
-printf 'No supported compositor session detected\n' >&2
-exit 1
+exec "$backend_command" next

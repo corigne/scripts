@@ -1,0 +1,24 @@
+#!/bin/sh
+set -eu
+
+desktop=$(printf '%s' "${XDG_CURRENT_DESKTOP:-}" | tr '[:upper:]' '[:lower:]')
+
+case "$desktop" in
+    *niri*)
+        printf '%s\n' niri
+        ;;
+    *kde*|*plasma*)
+        printf '%s\n' plasma
+        ;;
+    *)
+        if [ -n "${NIRI_SOCKET:-}" ]; then
+            printf '%s\n' niri
+        elif [ "${KDE_FULL_SESSION:-}" = true ]; then
+            printf '%s\n' plasma
+        else
+            printf 'Unsupported Wayland desktop: %s\n' \
+                "${XDG_CURRENT_DESKTOP:-unset}" >&2
+            exit 1
+        fi
+        ;;
+esac

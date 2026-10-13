@@ -1,7 +1,7 @@
 # Scripts
 
-Personal shell utilities. Maintained desktop commands live in `bin/`; older and
-unrelated scripts remain at the repository root.
+Personal shell utilities. Public commands live in `bin/`; desktop-specific
+implementations live behind them in `libexec/wayland-backends/`.
 
 ## Installation
 
@@ -13,8 +13,8 @@ mkdir -p "$HOME/.local/bin"
 stow --dir="$PWD" --target="$HOME/.local/bin" bin
 ```
 
-This links only commands from `bin/`; unrelated root scripts remain untouched.
-Ensure `~/.local/bin` is in `PATH`.
+The dotfiles profile links `bin/` into `~/.local/bin` and `libexec/` into
+`~/.local/libexec/dotfiles`. Ensure `~/.local/bin` is in `PATH`.
 To install selected commands without Stow:
 
 ```sh
@@ -27,59 +27,32 @@ Compositor-neutral commands:
 
 | Command | Purpose | Dependencies |
 | --- | --- | --- |
-| `screenshot-full` | Capture all outputs and copy the image | `grim`, `wl-clipboard`, `libnotify` |
-| `screenshot-region` | Freeze, select, capture, and copy a region | `wayfreeze`, `slurp`, `grim`, `wl-clipboard`, `libnotify` |
+| `wayland-backend` | Identify the active supported Wayland desktop | POSIX `sh` |
+| `screenshot-full` | Capture all outputs and copy the image | Niri: `grim`; Plasma: `spectacle`; both: `wl-clipboard`, `libnotify` |
+| `screenshot-region` | Interactively capture and copy a region | Niri: `wayfreeze`, `slurp`, `grim`; Plasma: `spectacle`; both: `wl-clipboard`, `libnotify` |
 | `thunar-extract-here` | Extract archives beside their source | `7z`, `ghostty`, `libnotify` |
 | `thunar-extract-to-folder` | Extract each archive to a named folder | `7z`, `ghostty`, `libnotify` |
-| `awww-slideshow` | Legacy multi-output `awww` slideshow | `awww`, `gowall`, GNU `parallel`, `jq`, `file`, `find`, `shuf` |
-| `awww-slideshow-control` | Signal the running slideshow by its runtime PID | POSIX `sh`, `grep`, `tr` |
 | `wallpaper-collection-select` | Persist and select from the active wallpaper collection | POSIX `sh`, `find`, `jq`, `shuf` |
-| `wallpaper-next` | Advance through Noctalia on Niri or the existing `awww` slideshow on Hyprland | POSIX `sh` |
-| `noctalia-wallpaper-random` | Select or advance a collection through one Noctalia plugin transaction | POSIX `sh`, `jq`, Niri, Noctalia |
+| `wallpaper-random` | Select a collection through the active desktop backend | POSIX `sh`; Niri/Noctalia or Plasma |
+| `wallpaper-next` | Advance the active collection through the active desktop backend | POSIX `sh`; Niri/Noctalia or Plasma |
 | `gimp-open-folder` | Open one folder's images in GIMP | `gimp`, `find`, `xargs` |
 | `krita` | Launch Krita with the retained Wayland scaling environment | `krita` |
 | `prepare-slideshows` | Build static and animated wallpaper collections | `rsync`; animated mode also needs `parallel`, `gowall`, `gifsicle`, ImageMagick, `bc`, `file` |
 | `wake-on-lan` | Discover hosts and send a Wake-on-LAN packet | `arp`, `getent`, plus `wol`, `wakeonlan`, or `etherwake` |
 | `wtfioh` | Show largest filesystem entries below a path | `sudo`, `du`, `sort`, `head` |
 
-`awww-slideshow` discovers outputs through `awww query`; it does not query a
-compositor. Niri wallpaper is expected to be managed by Noctalia instead.
 Collection state is stored under
-`$XDG_STATE_HOME/wallpaper-collection/state.json`. `wallpaper-next` never
-invokes Noctalia in a Hyprland session; it delegates to
-`awww-slideshow-control next`.
+`$XDG_STATE_HOME/wallpaper-collection/state.json`. Public wallpaper commands
+contain no compositor IPC. `wayland-backend` dispatches them to:
+
+- Niri/Noctalia: distinct per-output assignments and animated collections;
+- Plasma: stock `plasma-apply-wallpaperimage` with one static assignment.
 
 The Noctalia profile disables its native fixed-directory automation. The Niri
 profile's `wallpaper-collection.timer` calls the portable `wallpaper-next`
 dispatcher every five minutes, so automatic changes use the same active
-collection state. Scripts do not rewrite desktop configuration.
-
-Control the running instance without process-name matching:
-
-```sh
-awww-slideshow-control pause
-awww-slideshow-control resume
-awww-slideshow-control restart
-awww-slideshow-control stop
-awww-slideshow-control signal USR1
-```
-
-`signal` accepts `HUP`, `TERM`, `USR1`, or `USR2`. The helper reads
-`$XDG_RUNTIME_DIR/awww-slideshow.pid`, verifies the PID belongs to
-`awww-slideshow`, then signals only that process.
-
-Retained Hyprland-only commands:
-
-| Command | Purpose | Dependencies |
-| --- | --- | --- |
-| `hypr-lock` | Run Hyprlock, then prepare lock wallpapers | `hyprlock`, `gowall`, `find`, `shuf` |
-| `hypr-lock-before-sleep` | Start the suspend-specific lock | `hyprlock` |
-| `hypr-prepare-for-sleep` | Disable outputs and replace stale lock clients | `hyprctl`, `hyprlock` |
-| `hypr-lock-after-sleep` | Verify the fresh lock and restore outputs | `hyprctl`, `hyprlock` |
-| `hypr-idle` | Legacy Hyprland idle policy | `swayidle`, `swaylock`, `hyprctl`, `playerctl` |
-| `hypr-gamemode` | Toggle Hyprland effects and slideshow pause | `hyprctl` |
-| `hypr-kill` | Select and terminate one Hyprland window | `hyprprop`, `jq` |
-| `hypr-wayvnc` | Run WayVNC on a Hyprland headless output | `hyprctl`, `wayvnc` |
+collection state. Plasma is a manual recovery desktop and does not start that
+timer. Scripts do not rewrite desktop configuration.
 
 Runtime PID files, state lists, and temporary screenshots/extraction lists use
 `XDG_RUNTIME_DIR`.
@@ -130,10 +103,5 @@ Add to `~/.config/Thunar/uca.xml` inside `<actions>`:
 </action>
 ```
 
-Optionally add Hyprland window rules for a centered floating window:
-
-```
-windowrule = float 1, match:class ^io\.nexus\.thunarextract$
-windowrule = size 700 400, match:class ^io\.nexus\.thunarextract$
-windowrule = center 1, match:class ^io\.nexus\.thunarextract$
-```
+The extraction terminal uses application ID `io.nexus.thunarextract` so any
+Wayland desktop can apply an optional floating-window rule locally.

@@ -1,0 +1,18 @@
+#!/bin/sh
+set -eu
+
+[ "$#" -eq 1 ] && [ -d "$1" ] || {
+    printf 'Usage: wallpaper-random DIRECTORY\n' >&2
+    exit 2
+}
+
+backend=$(wayland-backend)
+backend_dir=${DOTFILES_WAYLAND_BACKEND_DIR:-"$HOME/.local/libexec/dotfiles/wayland-backends"}
+backend_command=$backend_dir/wallpaper-$backend
+
+[ -x "$backend_command" ] || {
+    printf 'Wallpaper backend is not installed: %s\n' "$backend_command" >&2
+    exit 1
+}
+
+exec "$backend_command" random "$1"
