@@ -21,20 +21,44 @@ NORMAL_ACTIONS: Final = {
         "up": "move-window-up",
         "down": "move-window-down",
     },
+    "workspace": {
+        "left": None,
+        "right": None,
+        "up": "focus-workspace-up",
+        "down": "focus-workspace-down",
+    },
+    "move-workspace": {
+        "left": None,
+        "right": None,
+        "up": "move-column-to-workspace-up",
+        "down": "move-column-to-workspace-down",
+    },
 }
 
 VERTICAL_ACTIONS: Final = {
     "focus": {
-        "left": "focus-workspace-up",
-        "right": "focus-workspace-down",
+        "left": "focus-window-up",
+        "right": "focus-window-down",
         "up": "focus-column-left",
         "down": "focus-column-right",
     },
     "move": {
-        "left": "move-column-to-workspace-up",
-        "right": "move-column-to-workspace-down",
+        "left": "move-window-up",
+        "right": "move-window-down",
         "up": "move-column-left",
         "down": "move-column-right",
+    },
+    "workspace": {
+        "left": "focus-workspace-up",
+        "right": "focus-workspace-down",
+        "up": None,
+        "down": None,
+    },
+    "move-workspace": {
+        "left": "move-column-to-workspace-up",
+        "right": "move-column-to-workspace-down",
+        "up": None,
+        "down": None,
     },
 }
 
@@ -78,8 +102,11 @@ def snapshot() -> tuple[object, object | None, int | None]:
     return output, window, workspace_id
 
 
-def run_action(action: str) -> None:
-    subprocess.run(["niri", "msg", "action", action], check=True)
+def run_action(action: str, *, follow: bool = True) -> None:
+    command = ["niri", "msg", "action", action]
+    if action.startswith("move-column-to-workspace-") and not follow:
+        command.extend(["--focus", "false"])
+    subprocess.run(command, check=True)
 
 
 def vertical_outputs() -> set[str]:
@@ -106,7 +133,7 @@ def focused_output_name() -> str:
 def usage() -> None:
     print(
         "usage: niri-physical-direction "
-        "(focus|focus-or-monitor|move|move-or-monitor) "
+        "(focus|focus-or-monitor|move|move-or-monitor|workspace|move-workspace) "
         "(left|right|up|down)",
         file=sys.stderr,
     )
@@ -129,9 +156,11 @@ def main() -> int:
     is_vertical = focused_output_name() in vertical_outputs()
     actions = VERTICAL_ACTIONS if is_vertical else NORMAL_ACTIONS
     action = actions[base_operation][direction]
+    if action is None:
+        return 0
 
     if not operation.endswith("-or-monitor"):
-        run_action(action)
+        run_action(action, follow=base_operation != "move-workspace")
         return 0
 
     before = snapshot()

@@ -67,17 +67,17 @@ axis rotates their physical meaning, so the shared Niri keybinds call
 The dispatcher reads the focused output through Niri IPC. Outputs listed in
 `$XDG_CONFIG_HOME/niri/vertical-main-axis-outputs` use this mapping:
 
-| Physical direction | Focus | Move |
+| Modifier layer | Normal horizontal main axis | Vertical main axis |
 | --- | --- | --- |
-| Left | Previous workspace | Send column to previous workspace and follow it |
-| Right | Next workspace | Send column to next workspace and follow it |
-| Up | Previous vertical column | Move column upward |
-| Down | Next vertical column | Move column downward |
+| `Mod` Left/Right | Focus columns | Focus windows within a column |
+| `Mod` Up/Down | Focus windows within a column | Focus vertical columns |
+| `Mod+Ctrl` Left/Right | No workspace on this physical axis | Focus horizontal workspaces |
+| `Mod+Ctrl` Up/Down | Focus vertical workspaces | No workspace on this physical axis |
 
-Unlisted outputs retain Niri's standard mapping: Left/Right operate on columns
-and Up/Down operate on windows inside a column. Blank lines and lines beginning
-with `#` are ignored. A missing file means every output uses the standard
-mapping.
+Shift performs the corresponding move. Workspace moves keep focus on the
+original workspace, matching the shared Niri configuration. Unlisted outputs
+retain Niri's standard mapping. Blank lines and lines beginning with `#` are
+ignored. A missing file means every output uses the standard mapping.
 
 `focus-or-monitor` and `move-or-monitor` first perform the output-local action.
 If focused output, window, and workspace state do not change, they try the
