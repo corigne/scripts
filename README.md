@@ -28,6 +28,7 @@ Compositor-neutral commands:
 | Command | Purpose | Dependencies |
 | --- | --- | --- |
 | `wayland-backend` | Identify the active supported Wayland desktop | POSIX `sh` |
+| `niri-physical-direction` | Keep directional focus and move actions physically oriented across horizontal and vertical layouts | Python 3, Niri |
 | `screenshot-full` | Capture all outputs and copy the image | Niri: `grim`; Plasma: `spectacle`; both: `wl-clipboard`, `libnotify` |
 | `screenshot-region` | Interactively capture and copy a region | Niri: `wayfreeze`, `slurp`, `grim`; Plasma: `spectacle`; both: `wl-clipboard`, `libnotify` |
 | `thunar-extract-here` | Extract archives beside their source | `7z`, `ghostty`, `libnotify` |

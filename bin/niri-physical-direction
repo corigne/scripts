@@ -1,0 +1,140 @@
+#!/usr/bin/env python3
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+from typing import Final
+
+
+NORMAL_ACTIONS: Final = {
+    "focus": {
+        "left": "focus-column-left",
+        "right": "focus-column-right",
+        "up": "focus-window-up",
+        "down": "focus-window-down",
+    },
+    "move": {
+        "left": "move-column-left",
+        "right": "move-column-right",
+        "up": "move-window-up",
+        "down": "move-window-down",
+    },
+}
+
+VERTICAL_ACTIONS: Final = {
+    "focus": {
+        "left": "focus-window-up",
+        "right": "focus-window-down",
+        "up": "focus-column-left",
+        "down": "focus-column-right",
+    },
+    "move": {
+        "left": "move-window-up",
+        "right": "move-window-down",
+        "up": "move-column-left",
+        "down": "move-column-right",
+    },
+}
+
+MONITOR_ACTIONS: Final = {
+    "focus": {
+        direction: f"focus-monitor-{direction}"
+        for direction in ("left", "right", "up", "down")
+    },
+    "move": {
+        direction: f"move-column-to-monitor-{direction}"
+        for direction in ("left", "right", "up", "down")
+    },
+}
+
+
+def niri_json(command: str) -> object:
+    result = subprocess.run(
+        ["niri", "msg", "--json", command],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return json.loads(result.stdout)
+
+
+def snapshot() -> tuple[object, object | None]:
+    output = niri_json("focused-output")
+    try:
+        window = niri_json("focused-window")
+    except subprocess.CalledProcessError:
+        window = None
+    return output, window
+
+
+def run_action(action: str) -> None:
+    subprocess.run(["niri", "msg", "action", action], check=True)
+
+
+def vertical_outputs() -> set[str]:
+    config_home = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+    path = config_home / "niri" / "vertical-main-axis-outputs"
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        return set()
+    return {
+        line.strip()
+        for line in lines
+        if line.strip() and not line.lstrip().startswith("#")
+    }
+
+
+def focused_output_name() -> str:
+    output = niri_json("focused-output")
+    if not isinstance(output, dict) or not isinstance(output.get("name"), str):
+        raise RuntimeError("niri returned no focused output name")
+    return output["name"]
+
+
+def usage() -> None:
+    print(
+        "usage: niri-physical-direction "
+        "(focus|focus-or-monitor|move|move-or-monitor) "
+        "(left|right|up|down)",
+        file=sys.stderr,
+    )
+
+
+def main() -> int:
+    if len(sys.argv) != 3:
+        usage()
+        return 2
+
+    operation, direction = sys.argv[1:]
+    base_operation = operation.removesuffix("-or-monitor")
+    if (
+        base_operation not in NORMAL_ACTIONS
+        or direction not in NORMAL_ACTIONS[base_operation]
+    ):
+        usage()
+        return 2
+
+    is_vertical = focused_output_name() in vertical_outputs()
+    actions = VERTICAL_ACTIONS if is_vertical else NORMAL_ACTIONS
+    action = actions[base_operation][direction]
+
+    if not operation.endswith("-or-monitor"):
+        run_action(action)
+        return 0
+
+    before = snapshot()
+    run_action(action)
+    if snapshot() == before:
+        run_action(MONITOR_ACTIONS[base_operation][direction])
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except (json.JSONDecodeError, OSError, RuntimeError, subprocess.CalledProcessError) as error:
+        print(f"niri-physical-direction: {error}", file=sys.stderr)
+        raise SystemExit(1)
