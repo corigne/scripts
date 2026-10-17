@@ -23,7 +23,7 @@ install -Dm755 bin/screenshot-full "$HOME/.local/bin/screenshot-full"
 
 ## Commands
 
-Compositor-neutral commands:
+Public commands:
 
 | Command | Purpose | Dependencies |
 | --- | --- | --- |
@@ -57,6 +57,35 @@ timer. Scripts do not rewrite desktop configuration.
 
 Runtime PID files, state lists, and temporary screenshots/extraction lists use
 `XDG_RUNTIME_DIR`.
+
+## niri-physical-direction
+
+Niri names focus and move actions after logical layout axes. A vertical main
+axis rotates their physical meaning, so the shared Niri keybinds call
+`niri-physical-direction` instead of binding those actions directly.
+
+The dispatcher reads the focused output through Niri IPC. Outputs listed in
+`$XDG_CONFIG_HOME/niri/vertical-main-axis-outputs` use this mapping:
+
+| Physical direction | Focus | Move |
+| --- | --- | --- |
+| Left | Previous workspace | Send column to previous workspace and follow it |
+| Right | Next workspace | Send column to next workspace and follow it |
+| Up | Previous vertical column | Move column upward |
+| Down | Next vertical column | Move column downward |
+
+Unlisted outputs retain Niri's standard mapping: Left/Right operate on columns
+and Up/Down operate on windows inside a column. Blank lines and lines beginning
+with `#` are ignored. A missing file means every output uses the standard
+mapping.
+
+`focus-or-monitor` and `move-or-monitor` first perform the output-local action.
+If focused output, window, and workspace state do not change, they try the
+physical monitor direction. Niri errors are written to stderr and return
+non-zero; the dispatcher does not silently substitute a different action.
+
+The host-local list must match every `main-axis "vertical"` output in
+`~/.config/niri/local.kdl`. Validate Niri after changing either file.
 
 ## thunar-extract-here / thunar-extract-to-folder
 
