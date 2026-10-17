@@ -25,14 +25,14 @@ NORMAL_ACTIONS: Final = {
 
 VERTICAL_ACTIONS: Final = {
     "focus": {
-        "left": "focus-window-up",
-        "right": "focus-window-down",
+        "left": "focus-workspace-up",
+        "right": "focus-workspace-down",
         "up": "focus-column-left",
         "down": "focus-column-right",
     },
     "move": {
-        "left": "move-window-up",
-        "right": "move-window-down",
+        "left": "move-column-to-workspace-up",
+        "right": "move-column-to-workspace-down",
         "up": "move-column-left",
         "down": "move-column-right",
     },
@@ -60,13 +60,22 @@ def niri_json(command: str) -> object:
     return json.loads(result.stdout)
 
 
-def snapshot() -> tuple[object, object | None]:
+def snapshot() -> tuple[object, object | None, int | None]:
     output = niri_json("focused-output")
     try:
         window = niri_json("focused-window")
     except subprocess.CalledProcessError:
         window = None
-    return output, window
+    workspaces = niri_json("workspaces")
+    workspace_id = next(
+        (
+            workspace["id"]
+            for workspace in workspaces
+            if isinstance(workspace, dict) and workspace.get("is_focused")
+        ),
+        None,
+    )
+    return output, window, workspace_id
 
 
 def run_action(action: str) -> None:
